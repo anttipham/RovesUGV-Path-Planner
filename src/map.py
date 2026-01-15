@@ -2,7 +2,7 @@ import folium
 import osmnx as ox
 
 
-def build_map_html() -> folium.Map:
+def build_map() -> folium.Map:
     graph = ox.graph.graph_from_place("Roves", network_type="walk")
     m = folium.Map(
         location=ox.geocode("Roves"),

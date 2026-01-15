@@ -1,15 +1,7 @@
-from PySide6 import QtWidgets, QtWebEngineWidgets
-import sys
+from streamlit_folium import st_folium
+
 import map
 
-def show_map(map):
-    app = QtWidgets.QApplication(sys.argv)
-    view = QtWebEngineWidgets.QWebEngineView()
-    view.setHtml(map.get_root().render())
-    view.resize(800, 600)
-    view.show()
-    sys.exit(app.exec())
-
-
 if __name__ == "__main__":
-    show_map(map.build_map_html())
+    m = map.build_map()
+    st_data = st_folium(m, width=725)
