@@ -1,4 +1,5 @@
 import folium
+from folium.plugins import Draw
 import osmnx as ox
 
 PLACE_NAME = "Roves"
@@ -48,5 +49,8 @@ def build_map() -> folium.Map:
 
     # Add layer control to switch layers on and off
     folium.LayerControl().add_to(map)
+
+    # Add drawing tools to the map
+    Draw(export=True).add_to(map)
 
     return map
