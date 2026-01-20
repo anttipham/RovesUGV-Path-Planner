@@ -6,12 +6,11 @@ PLACE_NAME = "Roves"
 
 
 def create_editable_road_layer() -> folium.FeatureGroup:
-    # Add OSMnx graph data to draw plugin
+    # Add undirected OSMnx graph data to draw plugin
     editable_road_layer = folium.FeatureGroup(name="Tieverkko")
     osm_graph = ox.graph.graph_from_place(
-        PLACE_NAME,
-        custom_filter='["foot"~"designated|yes"]',
-    )
+        PLACE_NAME, custom_filter='["foot"~"designated|yes"]'
+    ).to_undirected()
     nodes, edges = ox.graph_to_gdfs(osm_graph)
     # Loop edges to add them to the map
     for _, edge in edges.iterrows():
@@ -61,6 +60,7 @@ def build_map() -> folium.Map:
     road_layer = create_editable_road_layer().add_to(map)
     Draw(
         export=True,
+        filename="roves_ugv_map_data.geojson",
         feature_group=road_layer,
         draw_options={
             "polyline": True,
