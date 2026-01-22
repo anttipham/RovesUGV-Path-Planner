@@ -2,17 +2,17 @@ import folium
 from folium.plugins import Draw
 import osmnx as ox
 
-PLACE_NAME = "Roves"
+import config
+import road_graph
 
 
 def create_editable_road_layer() -> folium.FeatureGroup:
-    # Add undirected OSMnx graph data to draw plugin
-    editable_road_layer = folium.FeatureGroup(name="Tieverkko")
-    osm_graph = ox.graph.graph_from_place(
-        PLACE_NAME, custom_filter='["foot"~"designated|yes"]'
-    ).to_undirected()
+    editable_road_layer = folium.FeatureGroup(name=config.EDITABLE_ROAD_LAYER_NAME)
+
+    osm_graph = road_graph.create_road_graph()
+    # print(osm_graph.edges(keys=True, data=True))
     nodes, edges = ox.graph_to_gdfs(osm_graph)
-    # Loop edges to add them to the map
+    # print(edges.head())
     for _, edge in edges.iterrows():
         coords = [(y, x) for x, y in edge["geometry"].coords]
         folium.PolyLine(
@@ -25,14 +25,16 @@ def create_editable_road_layer() -> folium.FeatureGroup:
 
 def build_map() -> folium.Map:
     map = folium.Map(
-        location=ox.geocode(PLACE_NAME),
+        location=ox.geocode(config.PLACE_NAME),
         tiles=None,
         zoom_start=13,
         attributionControl=False,
     )
 
     # Fall back to OpenStreetMap when WMS layer is loading
-    folium.TileLayer(tiles="openstreetmap", name="OpenStreetMap").add_to(map)
+    folium.TileLayer(
+        tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
+    ).add_to(map)
 
     # Add Seinäjoki satellite image WMS layer
     folium.WmsTileLayer(
@@ -40,7 +42,7 @@ def build_map() -> folium.Map:
         layers="Hybridi-ilmakuva",
         transparent=True,
         fmt="image/png",
-        name="Ilmakuva",
+        name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
         overlay=False,
         show=True,
     ).add_to(map)
@@ -51,7 +53,7 @@ def build_map() -> folium.Map:
         layers="KantakartanMaastotiedot",
         transparent=True,
         fmt="image/png",
-        name="Maastotiedot",
+        name=config.SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME,
         overlay=True,
         show=True,
     ).add_to(map)

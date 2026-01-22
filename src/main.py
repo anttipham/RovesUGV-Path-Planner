@@ -2,6 +2,7 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
+import config
 import map
 
 LEAFLET_STYLING = """
@@ -15,7 +16,8 @@ LEAFLET_STYLING = """
 
 def main():
     # Initialize Streamlit app
-    st.set_page_config(page_title="UGV Roves", layout="wide")
+    st.set_page_config(page_title=config.APP_TITLE, layout="wide")
+    st.title(config.APP_TITLE)
 
     # Load and build the map
     m = map.build_map()
