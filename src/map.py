@@ -13,12 +13,19 @@ def create_editable_road_layer() -> folium.FeatureGroup:
     # print(osm_graph.edges(keys=True, data=True))
     nodes, edges = ox.graph_to_gdfs(osm_graph)
     # print(edges.head())
+
+    # Add edges and their metadata to the editable road layer
     for _, edge in edges.iterrows():
-        coords = [(y, x) for x, y in edge["geometry"].coords]
-        folium.PolyLine(
-            coords,
-            color="blue",
-        ).add_to(editable_road_layer)
+        # Make edge to geojson polyline and add to the layer
+        geojson_polyline = folium.GeoJson(
+            {
+                "type": "Feature",
+                "geometry": edge["geometry"].__geo_interface__,
+                "properties": edge.drop("geometry").to_dict(),
+            },
+            style_function=lambda x: {"color": "blue"},
+        )
+        geojson_polyline.add_to(editable_road_layer)
 
     return editable_road_layer
 
