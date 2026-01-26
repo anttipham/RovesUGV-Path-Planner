@@ -5,14 +5,6 @@ from streamlit_folium import st_folium
 import config
 import map
 
-LEAFLET_STYLING = """
-    <style>
-    .leaflet-div-icon.leaflet-editing-icon {
-        border-radius: 50%;
-    }
-    </style>
-"""
-
 
 def main():
     # Initialize Streamlit app
@@ -21,8 +13,6 @@ def main():
 
     # Load and build the map
     m = map.build_map()
-    # Custom CSS to style the edit vertices as circles
-    m.get_root().header.add_child(folium.Element(LEAFLET_STYLING))
 
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(m, use_container_width=True)
