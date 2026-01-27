@@ -59,6 +59,7 @@ def add_buildings(m: folium.Map) -> None:
 
 def add_roads(m: folium.Map) -> None:
     graph = osm_gis.create_road_graph()
+    osm_gis.add_access_ways(graph, osm_gis.get_building_geometries())
     folium.GeoJson(
         ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True),
         name=config.ROAD_LAYER_NAME,
