@@ -44,7 +44,7 @@ def add_tile_layers(m: folium.Map) -> None:
 
 
 def add_buildings(m: folium.Map) -> None:
-    gdf = osm_gis.get_building_geometries()
+    gdf = osm_gis.get_building_gdf()
     folium.GeoJson(
         gdf,
         name=config.BUILDING_LAYER_NAME,
@@ -58,10 +58,9 @@ def add_buildings(m: folium.Map) -> None:
 
 
 def add_roads(m: folium.Map) -> None:
-    graph = osm_gis.create_road_graph()
-    osm_gis.add_access_ways(graph, osm_gis.get_building_geometries())
+    graph, gdf = osm_gis.create_road_graph_gdf()
     folium.GeoJson(
-        ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True),
+        gdf,
         name=config.ROAD_LAYER_NAME,
         style_function=lambda feature: {
             "color": "blue",
@@ -69,6 +68,7 @@ def add_roads(m: folium.Map) -> None:
             "opacity": 0.7,
         },
     ).add_to(m)
+    return graph
 
 
 def build_map() -> folium.Map:

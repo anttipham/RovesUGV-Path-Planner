@@ -1,11 +1,13 @@
 import geopandas as gpd
 import osmnx as ox
 import networkx as nx
+import streamlit as st
 
 import config
 
 
-def get_building_geometries():
+@st.cache_data
+def get_building_gdf():
     # Fetch building geometries from OSMnx
     gdf = ox.features_from_place(
         config.PLACE_NAME,
@@ -14,22 +16,13 @@ def get_building_geometries():
     return gdf
 
 
-def create_road_graph():
-    # Add undirected OSMnx graph data to draw plugin
-    graph = ox.graph.graph_from_place(
-        config.PLACE_NAME,
-        network_type="all",
-        retain_all=True,
-    )
-    return graph
-
-
-def add_access_ways(
+def _add_access_ways(
     graph: nx.MultiDiGraph, building_geometries: gpd.GeoDataFrame
 ) -> None:
     node_id = max(graph.nodes)
     access_ways: list[tuple[int, int, int, int]] = []
     # Find the nearest point to be used as access way for each building
+    # for centroid in building_geometries.to_crs().centroid:
     for centroid in building_geometries.centroid:
         node_id += 1
         # Distance to nearest node
@@ -45,3 +38,17 @@ def add_access_ways(
 
     # Update edge length
     ox.distance.add_edge_lengths(graph)
+
+
+@st.cache_data
+def create_road_graph_gdf():
+    # Add undirected OSMnx graph data to draw plugin
+    graph = ox.graph.graph_from_place(
+        config.PLACE_NAME,
+        network_type="all",
+        retain_all=True,
+        simplify=False,
+    )
+    _add_access_ways(graph, get_building_gdf())
+    return graph, ox.graph_to_gdfs(graph, nodes=False)
+
