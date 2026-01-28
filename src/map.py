@@ -58,9 +58,9 @@ def add_buildings(m: folium.Map) -> None:
 
 
 def add_roads(m: folium.Map) -> None:
-    graph, gdf = osm_gis.create_road_graph_gdf()
+    graph = osm_gis.create_road_graph_gdf()
     folium.GeoJson(
-        gdf,
+        ox.graph_to_gdfs(graph, nodes=False),
         name=config.ROAD_LAYER_NAME,
         style_function=lambda feature: {
             "color": "blue",
