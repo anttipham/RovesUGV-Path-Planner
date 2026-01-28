@@ -1,5 +1,6 @@
 import geopandas as gpd
 import osmnx as ox
+import osmnx.projection
 import networkx as nx
 import streamlit as st
 
@@ -16,14 +17,18 @@ def get_building_gdf():
     return gdf
 
 
-def _add_access_ways(
-    graph: nx.MultiDiGraph, building_geometries: gpd.GeoDataFrame
-) -> None:
+def _add_access_ways(graph: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -> None:
+    """
+    TODO: Add to the nearest edge, not node
+    """
     node_id = max(graph.nodes)
     access_ways: list[tuple[int, int, int, int]] = []
     # Find the nearest point to be used as access way for each building
-    # for centroid in building_geometries.to_crs().centroid:
-    for centroid in building_geometries.centroid:
+    # The for loop could be simplified to `for centroid in building_gdf.centroid:`,
+    # but this results in a warning.
+    for centroid in osmnx.projection.project_gdf(building_gdf).centroid.to_crs(
+        crs=building_gdf.crs
+    ):
         node_id += 1
         # Distance to nearest node
         nearest_node = ox.distance.nearest_nodes(graph, centroid.x, centroid.y)
@@ -32,7 +37,7 @@ def _add_access_ways(
     # Add the access ways to the graph
     for node1, y, x, node2 in access_ways:
         # Add building centroid to graph
-        graph.add_node(node1, y=y, x=x)
+        graph.add_node(node1, y=y, x=x, building_access=True)
         graph.add_edge(node1, node2)
         graph.add_edge(node2, node1)
 
