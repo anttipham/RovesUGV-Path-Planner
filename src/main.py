@@ -14,7 +14,11 @@ def main():
     m = map.build_map()
 
     # Display the map in Streamlit and capture interaction data
-    st_data = st_folium(m, use_container_width=True)
+    st_data = st_folium(
+        m,
+        use_container_width=True,
+        returned_objects=["last_active_drawing"],
+    )
     st.text("Map interaction data:")
     st.write(st_data)
 
