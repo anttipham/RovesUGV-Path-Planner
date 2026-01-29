@@ -39,15 +39,15 @@ def _add_access_ways(graph: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -> 
     for node1, (node2, y, x) in access_ways.items():
         # Add building centroid to graph
         graph.add_node(node1, y=y, x=x, building_access=True)
-        graph.add_edge(node1, node2)
-        graph.add_edge(node2, node1)
+        graph.add_edge(node1, node2, foot="yes")
+        graph.add_edge(node2, node1, foot="yes")
 
     # Update edge length
     ox.distance.add_edge_lengths(graph)
 
 
 # @st.cache_data
-def create_road_graph_gdf():
+def create_road_graph():
     # Add undirected OSMnx graph data to draw plugin
     graph = ox.graph.graph_from_place(
         config.PLACE_NAME,
