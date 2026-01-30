@@ -1,4 +1,4 @@
-# import draw
+import draw
 import folium
 import osmnx as ox
 import networkx as nx
@@ -17,7 +17,7 @@ LEAFLET_STYLING = """
 """
 
 
-def add_tile_layers(m: folium.Map) -> None:
+def _add_tile_layers(m: folium.Map) -> None:
     # Fall back to OpenStreetMap when WMS layer is loading
     folium.TileLayer(
         tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
@@ -46,7 +46,7 @@ def add_tile_layers(m: folium.Map) -> None:
     ).add_to(m)
 
 
-def make_buildings() -> folium.GeoJson:
+def _make_buildings() -> folium.GeoJson:
     gdf = osm_gis.get_building_gdf()
     return folium.GeoJson(
         gdf,
@@ -60,27 +60,31 @@ def make_buildings() -> folium.GeoJson:
     )
 
 
-def make_roads(graph: nx.MultiDiGraph) -> folium.GeoJson:
+def _make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     # TODO: visualisoi centrality jakauma
     max_log_centrality = math.log(
-        max((val for _, _, val in graph.edges(data="centrality") if val != 0))
+        max((val for _, _, val in G.edges(data="centrality") if val != 0))
     )
-    min_log_centrality = math.log(
-        len(
-            [
-                node
-                for node, is_building_access in graph.nodes(data="building_access")
-                if is_building_access
-            ]
-        )
+    # Decrement by 1 to remove the building itself.
+    # The same building doesn't need paths to itself.
+    buildings_num = len(
+        [
+            node
+            for node, is_building_access in G.nodes(data="building_access")
+            if is_building_access
+        ]
     )
+    building_access_num = buildings_num - 1
+    min_log_centrality = math.log(building_access_num)
 
     def style(feature):
         centrality = feature["properties"]["centrality"]
-        if centrality <= 0:
+        # Use min centrality as the lower range
+        if centrality <= building_access_num:
             log_centrality = min_log_centrality
         else:
             log_centrality = math.log(centrality)
+
         log_centrality_normalized = (log_centrality - min_log_centrality) / (
             max_log_centrality - min_log_centrality
         )
@@ -95,13 +99,13 @@ def make_roads(graph: nx.MultiDiGraph) -> folium.GeoJson:
         }
 
     return folium.GeoJson(
-        ox.graph_to_gdfs(graph, nodes=False),
+        ox.graph_to_gdfs(G, nodes=False),
         name=config.ROAD_LAYER_NAME,
         style_function=style,
     )
 
 
-def build_map() -> folium.Map:
+def build_map(G: nx.MultiDiGraph) -> folium.Map:
     m = folium.Map(
         location=ox.geocode(config.PLACE_NAME),
         tiles=None,
@@ -109,18 +113,13 @@ def build_map() -> folium.Map:
         attributionControl=False,
     )
 
-    # Create graph
-    graph = osm_gis.create_road_graph()
-    path.add_weight(graph)
-    path.add_centrality(graph)
-
     # Construct map layers
-    add_tile_layers(m)
-    make_buildings().add_to(m)
-    make_roads(graph).add_to(m)
+    _add_tile_layers(m)
+    _make_buildings().add_to(m)
+    _make_roads(G).add_to(m)
 
     # # Add draw plugin to the map
-    # draw.add_draw_plugin(m)
+    draw.add_draw_plugin(m)
 
     # Add layer control to switch layers on and off
     folium.LayerControl().add_to(m)
