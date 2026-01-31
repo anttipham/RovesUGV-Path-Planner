@@ -2,9 +2,22 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 import config
+import folium
 import map
 import osm_gis
+import time
 import path
+import networkx as nx
+import streamlit as st
+
+
+def choose_building():
+    G: nx.MultiDiGraph = st.session_state["graph"]
+    clicked_object = st.session_state["map"]["last_active_drawing"]
+    # Update properties when clicked
+    if clicked_object and clicked_object["geometry"]["type"]:
+        id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
+        G.nodes[id]["chosen_time"] = time.time()
 
 
 def main():
@@ -13,29 +26,31 @@ def main():
     st.title(config.APP_TITLE)
 
     # Create graph
-    G = osm_gis.create_road_graph()
-    path.add_weight(G)
-    path.add_centrality(G)
+    if "graph" not in st.session_state:
+        G = osm_gis.create_road_graph()
+        path.add_weight(G)
+        path.add_centrality(G)
+        st.session_state["graph"] = G
+    G: nx.MultiDiGraph = st.session_state["graph"]
 
     # Load and build the map
     m = map.build_map(G)
 
+    # Load dynamically changing buildings
+    fg = folium.FeatureGroup(name="fg")
+    map.make_buildings(G).add_to(fg)
+
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
         m,
+        key="map",
         use_container_width=True,
         returned_objects=["last_active_drawing"],
+        feature_group_to_add=fg,
+        on_change=choose_building,
     )
     st.text("Map interaction data:")
-    st.write(st_data)
-
-    # Edit graph
-    clicked_object = st_data["last_active_drawing"]
-    if clicked_object and clicked_object["geometry"]["type"]:
-        id_str: str = clicked_object["id"]
-        id = int(id_str.lstrip("('way', ").rstrip(")"))
-        print(id)
-        print(G.nodes[id])
+    st.write(st.session_state)
 
 
 if __name__ == "__main__":

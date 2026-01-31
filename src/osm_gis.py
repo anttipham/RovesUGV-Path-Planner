@@ -1,6 +1,5 @@
 import geopandas as gpd
 import osmnx as ox
-import osmnx.projection
 import networkx as nx
 import shapely
 

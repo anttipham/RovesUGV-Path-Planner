@@ -6,7 +6,6 @@ import math
 
 import config
 import osm_gis
-import path
 
 LEAFLET_STYLING = """
     <style>
@@ -46,17 +45,35 @@ def _add_tile_layers(m: folium.Map) -> None:
     ).add_to(m)
 
 
-def _make_buildings() -> folium.GeoJson:
+def make_buildings(G: nx.MultiDiGraph) -> folium.GeoJson:
+    # Find all chosen buildings
+    all_chosen_buildings = [
+        (chosen_time, node)
+        for node, chosen_time in G.nodes(data="chosen_time")
+        if chosen_time
+    ]
+    all_chosen_buildings.sort(reverse=True)
+    chosen_buildings = [node for _, node in all_chosen_buildings[:2]]
+
+    def style(feature):
+        id = int(feature["id"].lstrip("('way', ").rstrip(")"))
+        if id in chosen_buildings:
+            color = "blue"
+        else:
+            color = "black"
+
+        return {
+            "fillColor": color,
+            "color": "black",
+            "weight": 1,
+            "fillOpacity": 0.7,
+        }
+
     gdf = osm_gis.get_building_gdf()
     return folium.GeoJson(
         gdf,
         name=config.BUILDING_LAYER_NAME,
-        style_function=lambda feature: {
-            "fillColor": "gray",
-            "color": "black",
-            "weight": 1,
-            "fillOpacity": 0.5,
-        },
+        style_function=style,
     )
 
 
@@ -115,10 +132,9 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
 
     # Construct map layers
     _add_tile_layers(m)
-    _make_buildings().add_to(m)
     _make_roads(G).add_to(m)
 
-    # # Add draw plugin to the map
+    # Add draw plugin to the map
     draw.add_draw_plugin(m)
 
     # Add layer control to switch layers on and off
