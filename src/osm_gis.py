@@ -1,3 +1,7 @@
+"""
+Everything related to OSMnx is here.
+"""
+
 import geopandas as gpd
 import osmnx as ox
 import networkx as nx

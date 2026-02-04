@@ -15,7 +15,7 @@ def choose_building():
     G: nx.MultiDiGraph = st.session_state["graph"]
     clicked_object = st.session_state["map"]["last_active_drawing"]
     # Update properties when clicked
-    if clicked_object and clicked_object["geometry"]["type"]:
+    if clicked_object and clicked_object["geometry"]["type"] == "Polygon":
         id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
         G.nodes[id]["chosen_time"] = time.time()
 
@@ -38,7 +38,9 @@ def main():
 
     # Load dynamically changing buildings
     fg = folium.FeatureGroup(name="fg")
-    map.make_buildings(G).add_to(fg)
+    source, target, *_ = path.get_chosen_buildings(G) + [None, None]
+    map.make_buildings([source, target]).add_to(fg)
+    map.make_roads(G, path.calc_path(G, source, target)).add_to(fg)
 
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
