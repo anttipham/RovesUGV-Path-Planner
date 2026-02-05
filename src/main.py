@@ -48,6 +48,7 @@ def main():
         returned_objects=["last_active_drawing"],
         feature_group_to_add=path.show_path(G),
         on_change=choose_building,
+        layer_control=folium.LayerControl(),
     )
     st.text("Map interaction data:")
     st.write(st.session_state)

@@ -125,9 +125,6 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     # Add draw plugin to the map
     draw.add_draw_plugin(m)
 
-    # Add layer control to switch layers on and off
-    folium.LayerControl().add_to(m)
-
     # Custom CSS to style the edit vertices as circles
     m.get_root().header.add_child(folium.Element(LEAFLET_STYLING))
 
