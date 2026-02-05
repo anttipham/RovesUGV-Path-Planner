@@ -2,13 +2,14 @@
 Everything related to drawing to the map and folium library is here.
 """
 
-import draw
-import folium
-import osmnx as ox
-import networkx as nx
 import math
 
+import folium
+import networkx as nx
+import osmnx as ox
+
 import config
+import draw
 import osm_gis
 
 LEAFLET_STYLING = """
@@ -49,31 +50,20 @@ def _add_tile_layers(m: folium.Map) -> None:
     ).add_to(m)
 
 
-def make_buildings(chosen_buildings: list[int] | None = None) -> folium.GeoJson:
-    def style(feature):
-        id = int(feature["id"].removeprefix("('way', ").removesuffix(")"))
-        if chosen_buildings and id in chosen_buildings:
-            color = "blue"
-        else:
-            color = "black"
-
-        return {
-            "fillColor": color,
+def make_buildings() -> folium.GeoJson:
+    return folium.GeoJson(
+        osm_gis.get_building_gdf(),
+        name=config.BUILDING_LAYER_NAME,
+        style_function=lambda _: {
+            # "fillColor": "black",
             "color": "black",
             "weight": 1,
-            "fillOpacity": 0.7,
-        }
-
-    gdf = osm_gis.get_building_gdf()
-    return folium.GeoJson(
-        gdf,
-        name=config.BUILDING_LAYER_NAME,
-        style_function=style,
+            "fillOpacity": 0.2,
+        },
     )
 
 
-def make_roads(G: nx.MultiDiGraph, path: list[tuple[int, int, int]]) -> folium.GeoJson:
-    # TODO: visualisoi centrality jakauma
+def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     max_log_centrality = math.log(
         max((val for _, _, val in G.edges(data="centrality") if val != 0))
     )
@@ -90,10 +80,6 @@ def make_roads(G: nx.MultiDiGraph, path: list[tuple[int, int, int]]) -> folium.G
     min_log_centrality = math.log(building_access_num)
 
     def style(feature):
-        # Parse ID
-        id_string = feature["id"].removeprefix("(").removesuffix(")").split(", ")
-        id = tuple(map(int, id_string))
-
         # Use more red if the centrality is higher, and scale centrality to a log scale
         centrality = feature["properties"]["centrality"]
         # Use min centrality as the lower range
@@ -106,15 +92,10 @@ def make_roads(G: nx.MultiDiGraph, path: list[tuple[int, int, int]]) -> folium.G
             max_log_centrality - min_log_centrality
         )
 
+        # Set road style
         red = int(0xFF * log_centrality_normalized)
-        thickness = int(4 * log_centrality_normalized) + 1
+        thickness = int(4 * log_centrality_normalized) + 2
         color = f"#{red:02x}0000"
-
-        # If the road is on the path, use different color
-        if id in path:
-            color = "blue"
-            thickness = 5
-
         return {
             "color": color,
             "weight": thickness,
@@ -138,6 +119,8 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
 
     # Construct map layers
     _add_tile_layers(m)
+    make_buildings().add_to(m)
+    make_roads(G).add_to(m)
 
     # Add draw plugin to the map
     draw.add_draw_plugin(m)

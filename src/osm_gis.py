@@ -3,16 +3,15 @@ Everything related to OSMnx is here.
 """
 
 import geopandas as gpd
-import osmnx as ox
 import networkx as nx
+import osmnx as ox
 import shapely
-
-# import streamlit as st
+import streamlit as st
 
 import config
 
 
-# @st.cache_data
+@st.cache_data
 def get_building_gdf():
     # Fetch building geometries from OSMnx
     gdf = ox.features_from_place(

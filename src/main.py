@@ -1,14 +1,18 @@
+"""
+Handles streamlit stuff
+"""
+
+import time
+
+import folium
+import networkx as nx
 import streamlit as st
 from streamlit_folium import st_folium
 
 import config
-import folium
 import map
 import osm_gis
-import time
 import path
-import networkx as nx
-import streamlit as st
 
 
 def choose_building():
@@ -36,19 +40,13 @@ def main():
     # Load and build the map
     m = map.build_map(G)
 
-    # Load dynamically changing buildings
-    fg = folium.FeatureGroup(name="fg")
-    source, target, *_ = path.get_chosen_buildings(G) + [None, None]
-    map.make_buildings([source, target]).add_to(fg)
-    map.make_roads(G, path.calc_path(G, source, target)).add_to(fg)
-
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
         m,
         key="map",
         use_container_width=True,
         returned_objects=["last_active_drawing"],
-        feature_group_to_add=fg,
+        feature_group_to_add=path.show_path(G),
         on_change=choose_building,
     )
     st.text("Map interaction data:")

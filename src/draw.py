@@ -1,7 +1,7 @@
 import folium
-from folium.plugins import Draw
-import osmnx as ox
 import geopandas as gpd
+import osmnx as ox
+from folium.plugins import Draw
 
 import config
 import osm_gis
@@ -21,7 +21,7 @@ on_create = folium.JsCode(
 
 def create_editable_road_layer() -> folium.FeatureGroup:
     editable_road_layer = folium.FeatureGroup(
-        name=config.EDITABLE_ROAD_LAYER_NAME,
+        name=config.DRAW_LAYER_NAME,
     )
 
     # TODO: Load a custom map of roads for editing access ways

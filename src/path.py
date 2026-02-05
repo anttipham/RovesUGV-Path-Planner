@@ -2,8 +2,12 @@
 Everything related to algorithms and paths are here
 """
 
+import folium
 import networkx as nx
 import osmnx as ox
+
+import config
+import osm_gis
 
 
 def add_weight(G: nx.MultiDiGraph) -> None:
@@ -30,13 +34,12 @@ def add_centrality(G: nx.MultiDiGraph) -> None:
         sources=buildings,
         targets=buildings,
         weight="weight",
-        # normalized=True,
     )
     for key, edge in G.edges.items():
         edge["centrality"] = centrality[key]
 
 
-def get_chosen_buildings(G: nx.MultiDiGraph) -> list[int]:
+def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
     # Find all chosen buildings
     all_chosen_buildings = [
         (chosen_time, node)
@@ -67,3 +70,41 @@ def calc_path(
         shortest_edge_path.append((u, v, min_data[1]))
 
     return shortest_edge_path
+
+
+def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
+    fg = folium.FeatureGroup(name=config.PATH_LAYER_NAME)
+    ids = get_chosen_building_nodes(G)
+
+    # Show chosen buildings
+    buildings = osm_gis.get_building_gdf()
+    chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
+    folium.GeoJson(
+        chosen_buildings,
+        name="moi",
+        style_function=lambda _: {
+            "fillColor": "blue",
+            "color": "black",
+            "weight": 1,
+            "fillOpacity": 0.6,
+        },
+    ).add_to(fg)
+
+    # Path requires a (1) source and (2) target node
+    if len(ids) < 2:
+        return fg
+
+    # Show shortest path between buildings
+    edges = calc_path(G, ids[0], ids[1])
+    path_graph = G.edge_subgraph(edges)
+    folium.GeoJson(
+        ox.graph_to_gdfs(path_graph, nodes=False),
+        name="moi2",
+        style_function=lambda _: {
+            "color": "blue",
+            "weight": 3,
+            "opacity": 1,
+        },
+    ).add_to(fg)
+
+    return fg
