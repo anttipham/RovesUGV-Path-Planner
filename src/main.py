@@ -19,7 +19,11 @@ def choose_building():
     G: nx.MultiDiGraph = st.session_state["graph"]
     clicked_object = st.session_state["map"]["last_active_drawing"]
     # Update properties when clicked
-    if clicked_object and clicked_object["geometry"]["type"] == "Polygon":
+    if (
+        clicked_object
+        and clicked_object["geometry"]["type"] == "Polygon"
+        and "id" in clicked_object
+    ):
         id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
         G.nodes[id]["chosen_time"] = time.time()
 

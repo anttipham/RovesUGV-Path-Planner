@@ -111,7 +111,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
 
 def build_map(G: nx.MultiDiGraph) -> folium.Map:
     m = folium.Map(
-        location=ox.geocode(config.PLACE_NAME),
+        location=config.START_LOCATION,
         tiles=None,
         zoom_start=13,
         attributionControl=False,

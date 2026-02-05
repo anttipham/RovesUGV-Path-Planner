@@ -14,8 +14,8 @@ import config
 @st.cache_data
 def get_building_gdf():
     # Fetch building geometries from OSMnx
-    gdf = ox.features_from_place(
-        config.PLACE_NAME,
+    gdf = ox.features_from_polygon(
+        config.AREA_POLYGON,
         {"building": True},
     )
     return gdf
@@ -50,8 +50,8 @@ def _add_building_access_ways(
 # @st.cache_data
 def create_road_graph() -> nx.MultiDiGraph:
     # Add undirected OSMnx graph data to draw plugin
-    G = ox.graph.graph_from_place(
-        config.PLACE_NAME,
+    G = ox.graph.graph_from_polygon(
+        config.AREA_POLYGON,
         network_type="all",
         # retain_all=True,
         simplify=False,
