@@ -11,7 +11,7 @@ import streamlit as st
 import config
 
 
-@st.cache_data
+# @st.cache_data
 def get_building_gdf():
     # Fetch building geometries from OSMnx
     gdf = ox.features_from_polygon(
@@ -21,18 +21,20 @@ def get_building_gdf():
     return gdf
 
 
-def _add_building_access_ways(
+def _add_building_access_nodes(
     G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame
 ) -> None:
-    """
-    TODO: Add to the nearest edge, not node
-    """
     access_ways: dict[int, tuple[int, int, int]] = {}
     # Find the nearest point to be used as access way for each building
     for row in building_gdf.itertuples():
-        centroid = shapely.centroid(row.geometry)
         id = row.Index[1]
-        # Get the nearest node
+        # Skip if the node already exists
+        if id in G.nodes():
+            continue
+
+        # Add the centroid of a building as a node to the graph
+        centroid = shapely.centroid(row.geometry)
+        # Attach the centroid to the nearest node
         nearest_node = ox.distance.nearest_nodes(G, centroid.x, centroid.y)
         access_ways[id] = (nearest_node, centroid.y, centroid.x)
 
@@ -56,5 +58,5 @@ def create_road_graph() -> nx.MultiDiGraph:
         # retain_all=True,
         simplify=False,
     )
-    _add_building_access_ways(G, get_building_gdf())
+    _add_building_access_nodes(G, get_building_gdf())
     return G

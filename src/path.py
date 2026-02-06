@@ -19,7 +19,7 @@ def add_weight(G: nx.MultiDiGraph) -> None:
         edge["weight"] = edge["length"]
         # Add more weight if the path is not for pedestrians
         if edge.get("foot") not in ("yes", "designated"):
-            edge["weight"] *= 10
+            edge["weight"] *= 3
 
 
 def add_centrality(G: nx.MultiDiGraph) -> None:
@@ -81,12 +81,11 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
     chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
     folium.GeoJson(
         chosen_buildings,
-        name="moi",
         style_function=lambda _: {
-            "fillColor": "blue",
+            "fillColor": "red",
             "color": "black",
-            "weight": 1,
-            "fillOpacity": 0.6,
+            "weight": 3,
+            "fillOpacity": 0.5,
         },
     ).add_to(fg)
 
@@ -99,9 +98,8 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
     path_graph = G.edge_subgraph(edges)
     folium.GeoJson(
         ox.graph_to_gdfs(path_graph, nodes=False),
-        name="moi2",
         style_function=lambda _: {
-            "color": "blue",
+            "color": "red",
             "weight": 3,
             "opacity": 1,
         },

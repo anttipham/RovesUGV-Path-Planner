@@ -93,9 +93,9 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
         )
 
         # Set road style
-        red = int(0xFF * log_centrality_normalized)
-        thickness = int(4 * log_centrality_normalized) + 2
-        color = f"#{red:02x}0000"
+        blue = int(0xFF * log_centrality_normalized)
+        thickness = int(3 * log_centrality_normalized) + 2
+        color = f"#0000{blue:02x}"
         return {
             "color": color,
             "weight": thickness,
