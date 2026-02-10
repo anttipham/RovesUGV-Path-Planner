@@ -22,32 +22,66 @@ LEAFLET_STYLING = """
 
 
 def _add_tile_layers(m: folium.Map) -> None:
-    # Fall back to OpenStreetMap when WMS layer is loading
-    folium.TileLayer(
-        tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
+    # OpenStreetMap
+    folium.WmsTileLayer(
+        url="http://localhost:8080/service",
+        layers="osm",
+        transparent=False,
+        fmt="image/png",
+        name=config.OPEN_STREET_MAP_LAYER_NAME,
+        overlay=False,
+        show=True,
     ).add_to(m)
 
-    # Add Seinäjoki satellite image WMS layer
+    # Seinäjoki satellite image
     folium.WmsTileLayer(
-        url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
-        layers="Hybridi-ilmakuva",
-        transparent=True,
+        url="http://localhost:8080/service",
+        layers="seinajoki_satellite_image",
+        transparent=False,
         fmt="image/png",
         name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
         overlay=False,
         show=True,
     ).add_to(m)
 
-    # Add Seinäjoki topographic map WMS layer
+    # Seinäjoki topographic map
     folium.WmsTileLayer(
-        url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
-        layers="KantakartanMaastotiedot",
+        url="http://localhost:8080/service",
+        layers="seinajoki_topographic_image",
         transparent=True,
         fmt="image/png",
         name=config.SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME,
         overlay=True,
         show=True,
     ).add_to(m)
+
+    # TODO: Fall back to uncached versions of the WMS layers when the MapProxy is down.
+    # # Fall back to OpenStreetMap when WMS layer is loading
+    # folium.TileLayer(
+    #     tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
+    # ).add_to(m)
+
+    # # Add Seinäjoki satellite image WMS layer
+    # folium.WmsTileLayer(
+    #     url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
+    #     layers="Hybridi-ilmakuva",
+    #     transparent=True,
+    #     fmt="image/png",
+    #     name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
+    #     overlay=False,
+    #     show=True,
+    # ).add_to(m)
+
+    # # Add Seinäjoki topographic map WMS layer
+    # folium.WmsTileLayer(
+    #     url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
+    #     layers="KantakartanMaastotiedot",
+    #     transparent=True,
+    #     fmt="image/png",
+    #     name=config.SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME,
+    #     overlay=True,
+    #     show=True,
+    # ).add_to(m)
 
 
 def make_buildings() -> folium.GeoJson:
@@ -115,6 +149,7 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
         tiles=None,
         zoom_start=13,
         attributionControl=False,
+        crs="EPSG3857",
     )
 
     # Construct map layers

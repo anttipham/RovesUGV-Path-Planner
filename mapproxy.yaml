@@ -1,0 +1,69 @@
+services:
+  wms:
+    srs: ['EPSG:3857']
+    image_formats: ['image/png', 'image/jpeg']
+    md:
+      title: OSM + Seinäjoki WMS (MapProxy)
+      abstract: OpenStreetMap and Seinäjoki WMS layers via MapProxy
+  demo:
+
+layers:
+  - name: osm
+    title: OpenStreetMap
+    sources: [osm_cache]
+
+  - name: seinajoki_satellite_image
+    title: Seinäjoki Satellite Image
+    sources: [seinajoki_satellite_image_cache]
+
+  - name: seinajoki_topographic_image
+    title: Seinäjoki Topographic Image
+    sources: [seinajoki_topographic_image_cache]
+
+sources:
+  osm_tiles:
+    type: tile
+    grid: webmercator
+    url: https://tile.openstreetmap.org/%(z)s/%(x)s/%(y)s.png
+    attribution: "© OpenStreetMap contributors"
+
+  seinajoki_satellite_image_wms:
+    type: wms
+    req:
+      url: https://kartat.seinajoki.fi/teklaogcweb/wms.ashx
+      layers: Hybridi-ilmakuva
+    supported_srs:
+      - EPSG:3857
+
+  seinajoki_topographic_image_wms:
+    type: wms
+    req:
+      url: https://kartat.seinajoki.fi/teklaogcweb/wms.ashx
+      layers: KantakartanMaastotiedot
+      transparent: true
+    supported_srs:
+      - EPSG:3857
+
+caches:
+  osm_cache:
+    sources: [osm_tiles]
+    grids: [webmercator]
+    format: image/png
+
+  seinajoki_satellite_image_cache:
+    sources: [seinajoki_satellite_image_wms]
+    grids: [webmercator]
+    format: image/png
+
+  seinajoki_topographic_image_cache:
+    sources: [seinajoki_topographic_image_wms]
+    grids: [webmercator]
+    format: image/png
+
+grids:
+  webmercator:
+    base: GLOBAL_WEBMERCATOR
+
+globals:
+  cache:
+    base_dir: ./cache_data
