@@ -12,7 +12,7 @@ import config
 
 
 # @st.cache_data
-def get_building_gdf():
+def get_building_gdf() -> gpd.GeoDataFrame:
     # Fetch building geometries from OSMnx
     gdf = ox.features_from_polygon(
         config.AREA_POLYGON,
@@ -24,6 +24,9 @@ def get_building_gdf():
 def _add_building_access_nodes(
     G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame
 ) -> None:
+    """
+    TODO: Connect buildings to nearest edge
+    """
     access_ways: dict[int, tuple[int, int, int]] = {}
     # Find the nearest point to be used as access way for each building
     for row in building_gdf.itertuples():
@@ -56,6 +59,7 @@ def create_road_graph() -> nx.MultiDiGraph:
         config.AREA_POLYGON,
         network_type="all",
         # retain_all=True,
+        truncate_by_edge=True,
         simplify=False,
     )
     _add_building_access_nodes(G, get_building_gdf())
