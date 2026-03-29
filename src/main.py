@@ -44,6 +44,14 @@ def main():
     # Load and build the map
     m = map.build_map(G)
 
+    # Presentation markers
+    # markers = folium.FeatureGroup("Yritykset")
+    # for name, coords in config.MARKERS.items():
+    #     node = ox.nearest_nodes(G, coords[1], coords[0])
+    #     node_attr = G.nodes[node]
+    #     folium.Marker((node_attr["y"], node_attr["x"]), tooltip=name).add_to(markers)
+    # markers.add_to(m)
+
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
         m,
