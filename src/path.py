@@ -5,9 +5,14 @@ Everything related to algorithms and paths are here
 import folium
 import networkx as nx
 import osmnx as ox
+import pyproj
+import requests
+import io
+from PIL import Image
 
 import config
 import osm_gis
+import path_image
 
 
 def add_weight(G: nx.MultiDiGraph) -> None:
@@ -106,3 +111,30 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
     ).add_to(fg)
 
     return fg
+
+
+def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
+    x, y = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857").transform(*coord[::-1])
+    print(f"Calculating premise bbox: {x-500},{y-500},{x+500},{y+500}")
+
+    url = "http://localhost:8080/service"
+    params = {
+        "service": "WMS",
+        "request": "GetMap",
+        "layers": "seinajoki_topographic_image",
+        "styles": "",
+        "format": "image/png",
+        "transparent": "true",
+        "version": "1.1.1",
+        "width": 512,
+        "height": 512,
+        "srs": "EPSG:3857",
+        "bbox": f"{x-500},{y-500},{x+500},{y+500}",
+    }
+    img = Image.open(io.BytesIO(requests.get(url, params=params).content))
+    img.save("start.png")
+    # path_image.test()
+
+
+# 2547358.7979757410,9047134.93059876,2548358.797975741,9048134.93059876
+# http://localhost:8080/service?service=WMS&request=GetMap&layers=seinajoki_topographic_image&styles=&format=image%2Fpng&transparent=true&version=1.1.1&width=512&height=512&srs=EPSG%3A3857&bbox=2547358.7979757410,9047134.93059876,2548358.797975741,9048134.93059876
