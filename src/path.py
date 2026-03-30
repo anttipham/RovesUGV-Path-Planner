@@ -9,6 +9,7 @@ import numpy as np
 import osmnx as ox
 import pyproj
 import requests
+from shapely.geometry import LineString
 
 import config
 import osm_gis
@@ -114,6 +115,7 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
 
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
+    # Download image of the premise area
     x, y = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857").transform(*coord[::-1])
     bbox = (
         x - config.BBOX_SIZE,
@@ -139,4 +141,34 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     response = requests.get(url, params=params)
     img_array = np.frombuffer(response.content, dtype=np.uint8)
     img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+
+    # Compute paths on the premise image and add them to the map
     paths = path_image.calc_2d_premise_paths(G, img, bbox)
+
+    # def draw_comparison(
+    #     image: np.ndarray,
+    #     original_points: list[tuple[int, int]],
+    #     simplified_points: list[tuple[int, int]],
+    # ) -> None:
+    #     if image.ndim == 2:
+    #         vis = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    #     else:
+    #         vis = image.copy()
+    #     # Original (thin yellow)
+    #     for y, x in original_points:
+    #         cv2.circle(vis, (x, y), 1, (0, 255, 255), -1)
+    #     # Simplified (larger red)
+    #     cv2.polylines(vis, [np.array(simplified_points)], False, (0, 0, 255), 2)
+    #     # for y, x in simplified_points:
+    #     #     cv2.circle(vis, (x, y), 4, (0, 0, 255), -1)
+    #     cv2.imshow("Path Comparison", vis)
+    #     cv2.waitKey(0)
+
+    for path in paths.values():
+        line = LineString([(y, x) for (x, y) in path])
+        simplified = line.simplify(tolerance=2.0)
+        simplified_points = [(int(y), int(x)) for y, x in simplified.coords]
+        # print(f"Original path: {path}")
+        # print(f"Simplified path: {simplified_points}")
+
+        # draw_comparison(img, path, simplified_points)

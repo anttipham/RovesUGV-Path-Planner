@@ -511,6 +511,10 @@ def goal_mask_from_osmnx_graph(
         dtype=np.uint8,
     )
 
+    # Widen lines to 3 pixels
+    kernel = np.ones((3, 3), dtype=np.uint8)
+    goal_mask = cv2.dilate(goal_mask, kernel, iterations=1)
+
     return goal_mask
 
 
@@ -592,6 +596,20 @@ def calc_2d_premise_paths(G, map_img, bbox) -> Dict[Point, List[Point]]:
         obstacle_cost_map=obstacle_cost_map,
         goal_block_diameter=config.GOAL_BLOCK_DIAMETER,
     )
+
+    # Debug visualization
+    blocked_goals = list(paths.keys())
+    vis = map_img.copy()  # type: ignore
+    for path in paths.values():
+        vis = overlay_path(
+            vis,
+            path,
+            start=start,
+            goals=goal_points,
+            blocked_goals=blocked_goals,
+            block_diameter=75,
+        )
+    cv2.imwrite("path_debug.png", vis)
     return paths
 
 
