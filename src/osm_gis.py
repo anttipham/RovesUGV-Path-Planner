@@ -45,8 +45,8 @@ def _add_building_access_nodes(
     for node1, (node2, y, x) in access_ways.items():
         # Add building centroid to graph
         G.add_node(node1, y=y, x=x, building_access=True)
-        G.add_edge(node1, node2, foot="yes")
-        G.add_edge(node2, node1, foot="yes")
+        G.add_edge(node1, node2, foot="yes", building_access=True)
+        G.add_edge(node2, node1, foot="yes", building_access=True)
 
     # Update edge length
     ox.distance.add_edge_lengths(G)

@@ -2,13 +2,13 @@
 Everything related to algorithms and paths are here
 """
 
+import cv2
 import folium
 import networkx as nx
+import numpy as np
 import osmnx as ox
 import pyproj
 import requests
-import io
-from PIL import Image
 
 import config
 import osm_gis
@@ -115,8 +115,13 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     x, y = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857").transform(*coord[::-1])
-    print(f"Calculating premise bbox: {x-500},{y-500},{x+500},{y+500}")
-
+    bbox = (
+        x - config.BBOX_SIZE,
+        y - config.BBOX_SIZE,
+        x + config.BBOX_SIZE,
+        y + config.BBOX_SIZE,
+    )
+    # print(f"Calculating premise bbox: {x-500},{y-500},{x+500},{y+500}")
     url = "http://localhost:8080/service"
     params = {
         "service": "WMS",
@@ -126,15 +131,12 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         "format": "image/png",
         "transparent": "true",
         "version": "1.1.1",
-        "width": 512,
-        "height": 512,
+        "width": config.BBOX_IMAGE_SIZE,
+        "height": config.BBOX_IMAGE_SIZE,
         "srs": "EPSG:3857",
-        "bbox": f"{x-500},{y-500},{x+500},{y+500}",
+        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
     }
-    img = Image.open(io.BytesIO(requests.get(url, params=params).content))
-    img.save("start.png")
-    # path_image.test()
-
-
-# 2547358.7979757410,9047134.93059876,2548358.797975741,9048134.93059876
-# http://localhost:8080/service?service=WMS&request=GetMap&layers=seinajoki_topographic_image&styles=&format=image%2Fpng&transparent=true&version=1.1.1&width=512&height=512&srs=EPSG%3A3857&bbox=2547358.7979757410,9047134.93059876,2548358.797975741,9048134.93059876
+    response = requests.get(url, params=params)
+    img_array = np.frombuffer(response.content, dtype=np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+    paths = path_image.calc_2d_premise_paths(G, img, bbox)

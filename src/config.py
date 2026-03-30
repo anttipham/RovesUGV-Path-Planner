@@ -25,6 +25,14 @@ for tag in TAGS_WAY:
     if tag not in ox.settings.useful_tags_way:
         ox.settings.useful_tags_way += [tag]
 
+# 2D pathfinding constants
+TRAVERSABLE_THRESHOLD = 98
+GOAL_BLOCK_DIAMETER = 75
+MINIMUM_OBSTACLE_DISTANCE = 2
+GRADUAL_OBSTACLE_COST_RADIUS = 5
+BBOX_SIZE = 500
+BBOX_IMAGE_SIZE = 512
+
 # Map features of Roves
 START_LOCATION = (62.781708, 22.894071)
 # MARKERS = {

@@ -1,8 +1,5 @@
 """
-Warning: This code is a quick prototype for pathfinding visualization and may contain
-bugs or inefficiencies.
-
-This file is largely vibe coded, but the code has been checked.
+Warning: This file is largely vibe coded, but the code has been checked.
 """
 
 from __future__ import annotations
@@ -11,9 +8,17 @@ import heapq
 from typing import Dict, List, Optional, Tuple
 
 import cv2
+import geopandas as gpd
+import networkx as nx
 import numpy as np
+import osmnx as ox
+from rasterio.features import rasterize
+from rasterio.transform import from_bounds
+from shapely.geometry import box
 
+import config
 
+BoundingBox = Tuple[float, float, float, float]  # (min_x, min_y, max_x, max_y)
 Point = Tuple[int, int]  # (row, col)
 
 
@@ -129,7 +134,7 @@ def find_center_free_cell(traversable: np.ndarray) -> Point:
             if traversable[p]:
                 return p
 
-    raise ValueError("No free cell found in map.")
+    return center  # Fallback, should not happen if there's any free cell at all
 
 
 def extract_goal_points(goal_mask: np.ndarray) -> List[Point]:
@@ -416,14 +421,106 @@ def overlay_path(
 
     if goals is not None:
         for goal_y, goal_x in goals:
-            cv2.circle(vis, (goal_x, goal_y), 2, (255, 0, 0), -1)
+            cv2.circle(vis, (goal_x, goal_y), 1, (255, 0, 0), -1)
 
     return vis
 
 
-def test():
-    map_img = cv2.imread("start.png", cv2.IMREAD_GRAYSCALE)
-    goal_mask = cv2.imread("goal_mask.png", cv2.IMREAD_GRAYSCALE)
+def goal_mask_from_osmnx_graph(
+    graph: nx.MultiDiGraph,
+    bbox: BoundingBox,
+    mask_height: int,
+    mask_width: int,
+) -> np.ndarray:
+    """
+    Create a binary goal mask from an OSMnx graph inside a bounding box.
+
+    Parameters
+    ----------
+    graph : nx.MultiDiGraph
+        OSMnx graph, typically in EPSG:4326.
+    bbox : tuple[float, float, float, float]
+        Bounding box as (min_x, min_y, max_x, max_y) in EPSG:3857.
+    mask_height : int
+        Output mask height in pixels.
+    mask_width : int
+        Output mask width in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        Binary mask of shape (mask_height, mask_width), dtype=uint8.
+        1 means graph edge present, 0 means background.
+    """
+    # Convert graph edges to GeoDataFrame
+    edges_gdf = ox.convert.graph_to_gdfs(
+        graph,
+        nodes=False,
+        edges=True,
+        fill_edge_geometry=True,
+    )
+
+    if edges_gdf.crs is None:
+        raise ValueError("edges_gdf has no CRS. The graph must have CRS metadata.")
+
+    # Reproject graph edges to match the bbox CRS
+    edges_gdf = edges_gdf.to_crs(epsg=3857)
+
+    min_x, min_y, max_x, max_y = bbox
+
+    bbox_polygon = box(min_x, min_y, max_x, max_y)
+    bbox_gdf = gpd.GeoDataFrame(
+        geometry=[bbox_polygon],
+        crs="EPSG:3857",
+    )
+
+    # Exclude building_access edges
+    if "building_access" in edges_gdf.columns:
+        edges_gdf = edges_gdf[~edges_gdf["building_access"].fillna(False)]
+
+    # Clip graph edges to bounding box
+    clipped_edges = gpd.clip(edges_gdf, bbox_gdf)
+
+    if clipped_edges.empty:
+        return np.zeros((mask_height, mask_width), dtype=np.uint8)
+
+    # Build affine transform for rasterization
+    transform = from_bounds(
+        west=min_x,
+        south=min_y,
+        east=max_x,
+        north=max_y,
+        width=mask_width,
+        height=mask_height,
+    )
+
+    # Burn geometries into raster
+    shapes = (
+        (geometry, 1)
+        for geometry in clipped_edges.geometry
+        if geometry is not None and not geometry.is_empty
+    )
+
+    goal_mask = rasterize(
+        shapes=shapes,
+        out_shape=(mask_height, mask_width),
+        transform=transform,
+        fill=0,
+        default_value=1,
+        all_touched=True,
+        dtype=np.uint8,
+    )
+
+    return goal_mask
+
+
+def test(G, map_img, bbox):
+    # map_img = cv2.imread("start.png", cv2.IMREAD_GRAYSCALE)
+    # goal_mask = cv2.imread("goal_mask.png", cv2.IMREAD_GRAYSCALE)
+    goal_mask = goal_mask_from_osmnx_graph(G, bbox, mask_height=512, mask_width=512)
+
+    # For debugging: save the goal mask image
+    cv2.imwrite("goal_mask.png", goal_mask)
 
     traversable = build_traversable_mask(
         map_img,
@@ -449,6 +546,7 @@ def test():
         start,
         goal_points,
         obstacle_cost_map=obstacle_cost_map,
+        goal_block_diameter=75,
     )
 
     blocked_goals = list(paths.keys())
@@ -464,9 +562,37 @@ def test():
                 start=start,
                 goals=goal_points,
                 blocked_goals=blocked_goals,
+                block_diameter=75,
             )
         cv2.imwrite("path_debug.png", vis)
         print(paths)
+
+
+def calc_2d_premise_paths(G, map_img, bbox) -> Dict[Point, List[Point]]:
+    traversable = build_traversable_mask(
+        map_img,
+        threshold=config.TRAVERSABLE_THRESHOLD,
+        free_is_dark=True,
+        erode_obstacles=config.MINIMUM_OBSTACLE_DISTANCE,
+    )
+    start = find_center_free_cell(traversable)
+    obstacle_cost_map = compute_obstacle_cost_map(
+        traversable, config.GRADUAL_OBSTACLE_COST_RADIUS
+    )
+
+    goal_mask = goal_mask_from_osmnx_graph(
+        G, bbox, mask_height=config.BBOX_SIZE, mask_width=config.BBOX_IMAGE_SIZE
+    )
+    goal_points = extract_goal_points(goal_mask)
+
+    paths = dijkstra_to_multiple_goals(
+        traversable,
+        start,
+        goal_points,
+        obstacle_cost_map=obstacle_cost_map,
+        goal_block_diameter=config.GOAL_BLOCK_DIAMETER,
+    )
+    return paths
 
 
 if __name__ == "__main__":
