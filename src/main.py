@@ -55,18 +55,18 @@ def main():
 
     # Load and build the map
     m = map.build_map(G)
-    gdf = ox.graph_to_gdfs(G, nodes=True, edges=False)
-    folium.GeoJson(
-        gdf,
-        style_function=lambda _: {
-            "fillColor": "blue",
-            "color": "black",
-            "weight": 3,
-            "fillOpacity": 0.5,
-        },
-    ).add_to(m)
 
     # Display nodes in map for debugging
+    # gdf = ox.graph_to_gdfs(G, nodes=True, edges=False)
+    # folium.GeoJson(
+    #     gdf,
+    #     style_function=lambda _: {
+    #         "fillColor": "blue",
+    #         "color": "black",
+    #         "weight": 3,
+    #         "fillOpacity": 0.5,
+    #     },
+    # ).add_to(m)
 
     # Presentation markers
     # markers = folium.FeatureGroup("Yritykset")
