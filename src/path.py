@@ -9,7 +9,7 @@ import numpy as np
 import osmnx as ox
 import pyproj
 import requests
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 import config
 import osm_gis
@@ -112,6 +112,91 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
     ).add_to(fg)
 
     return fg
+
+
+def connect_to_nearest_edge(
+    G: nx.MultiDiGraph,
+    node_id: int,
+) -> int:
+    """
+    Split nearest edge (assumed straight) and connect an existing node to it.
+
+    Graph must have node attributes:
+        node["x"], node["y"]
+
+    Returns
+    -------
+    new_node_id (the inserted split node)
+    """
+    transformer = pyproj.Transformer.from_crs(
+        config.MAP_EPSG,
+        config.METRIC_EPSG,
+        always_xy=True,
+    )
+    inverse_transformer = pyproj.Transformer.from_crs(
+        config.METRIC_EPSG,
+        config.MAP_EPSG,
+        always_xy=True,
+    )
+
+    # Get coordinate from node
+    x = G.nodes[node_id]["x"]
+    y = G.nodes[node_id]["y"]
+
+    # Project to metric CRS
+    proj_x, proj_y = transformer.transform(x, y)
+    proj_target_point = Point(proj_x, proj_y)
+    proj_graph = ox.project_graph(G, to_crs=config.METRIC_EPSG)
+
+    # Find nearest edge
+    u, v, key = ox.distance.nearest_edges(proj_graph, X=proj_x, Y=proj_y)
+
+    # Reconstruct edge line
+    proj_ux = proj_graph.nodes[u]["x"]
+    proj_uy = proj_graph.nodes[u]["y"]
+    proj_vx = proj_graph.nodes[v]["x"]
+    proj_vy = proj_graph.nodes[v]["y"]
+    edge_line = LineString([(proj_ux, proj_uy), (proj_vx, proj_vy)])
+
+    # Project node onto edge
+    projected_distance = edge_line.project(proj_target_point)
+    proj_split_point = edge_line.interpolate(projected_distance)
+    proj_split_x = float(proj_split_point.x)
+    proj_split_y = float(proj_split_point.y)
+
+    # Back to original CRS
+    split_x, split_y = inverse_transformer.transform(proj_split_x, proj_split_y)
+
+    # Create split node
+    new_node_id = max(G.nodes) + 1
+    G.add_node(new_node_id, x=split_x, y=split_y)
+
+    # Remove original edge
+    original_attrs = dict(G.edges[u, v, key])
+    G.remove_edge(u, v, key)
+
+    # Add split edges
+    base_attrs = {k: v for k, v in original_attrs.items() if k != "length"}
+    G.add_edge(u, new_node_id, **base_attrs)
+    G.add_edge(new_node_id, u, **base_attrs)
+    G.add_edge(v, new_node_id, **base_attrs)
+    G.add_edge(new_node_id, v, **base_attrs)
+
+    # Connect argument node to split node
+    G.add_edge(
+        new_node_id,
+        node_id,
+        foot="yes",
+        virtual="yes",
+    )
+    G.add_edge(
+        node_id,
+        new_node_id,
+        foot="yes",
+        virtual="yes",
+    )
+
+    return new_node_id
 
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
