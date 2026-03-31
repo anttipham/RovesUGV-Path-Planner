@@ -572,7 +572,12 @@ def test(G, map_img, bbox):
         print(paths)
 
 
-def calc_2d_premise_paths(G, map_img, bbox) -> Dict[Point, List[Point]]:
+def calc_2d_premise_paths(
+    G: nx.MultiDiGraph,
+    map_img: np.ndarray,
+    bbox: BoundingBox,
+    debug_img: bool = False,
+) -> Dict[Point, List[Point]]:
     traversable = build_traversable_mask(
         map_img,
         threshold=config.TRAVERSABLE_THRESHOLD,
@@ -609,7 +614,10 @@ def calc_2d_premise_paths(G, map_img, bbox) -> Dict[Point, List[Point]]:
             blocked_goals=blocked_goals,
             block_diameter=75,
         )
-    cv2.imwrite("path_debug.png", vis)
+
+    if debug_img:
+        cv2.imwrite("path_debug.png", vis)
+
     return paths
 
 
