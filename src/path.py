@@ -116,7 +116,9 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     # Download image of the premise area
-    x, y = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857").transform(*coord[::-1])
+    x, y = pyproj.Transformer.from_crs(config.MAP_EPSG, config.METRIC_EPSG).transform(
+        *coord[::-1]
+    )
     bbox = (
         x - config.BBOX_SIZE,
         y - config.BBOX_SIZE,
@@ -135,7 +137,7 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         "version": "1.1.1",
         "width": config.BBOX_IMAGE_SIZE,
         "height": config.BBOX_IMAGE_SIZE,
-        "srs": "EPSG:3857",
+        "srs": config.METRIC_EPSG,
         "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
     }
     response = requests.get(url, params=params)

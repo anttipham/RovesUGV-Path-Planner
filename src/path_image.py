@@ -471,7 +471,7 @@ def goal_mask_from_osmnx_graph(
     bbox_polygon = box(min_x, min_y, max_x, max_y)
     bbox_gdf = gpd.GeoDataFrame(
         geometry=[bbox_polygon],
-        crs="EPSG:3857",
+        crs=config.METRIC_EPSG,
     )
 
     # Exclude building_access edges

@@ -8,6 +8,7 @@ import folium
 import networkx as nx
 import streamlit as st
 from streamlit_folium import st_folium
+import osmnx as ox
 
 import config
 import map
@@ -46,6 +47,7 @@ def main():
     # Create graph
     if "graph" not in st.session_state:
         G = osm_gis.create_road_graph()
+        ox.distance.add_edge_lengths(G)
         path.add_weight(G)
         path.add_centrality(G)
         st.session_state["graph"] = G
@@ -53,6 +55,18 @@ def main():
 
     # Load and build the map
     m = map.build_map(G)
+    gdf = ox.graph_to_gdfs(G, nodes=True, edges=False)
+    folium.GeoJson(
+        gdf,
+        style_function=lambda _: {
+            "fillColor": "blue",
+            "color": "black",
+            "weight": 3,
+            "fillOpacity": 0.5,
+        },
+    ).add_to(m)
+
+    # Display nodes in map for debugging
 
     # Presentation markers
     # markers = folium.FeatureGroup("Yritykset")

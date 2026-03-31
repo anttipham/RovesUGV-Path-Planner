@@ -48,9 +48,6 @@ def _add_building_access_nodes(
         G.add_edge(node1, node2, foot="yes", building_access=True)
         G.add_edge(node2, node1, foot="yes", building_access=True)
 
-    # Update edge length
-    ox.distance.add_edge_lengths(G)
-
 
 # @st.cache_data
 def create_road_graph() -> nx.MultiDiGraph:
