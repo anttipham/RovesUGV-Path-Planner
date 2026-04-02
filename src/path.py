@@ -175,9 +175,9 @@ def split_nearest_edge(G: nx.MultiDiGraph, x: int, y: int) -> int:
     return new_node_id
 
 
-def trim_paths(
+def simplify_paths(
     paths: list[list[tuple[int, int]]],
-    tolerance: float = 3.0,
+    tolerance,
 ) -> list[list[tuple[int, int]]]:
     """
     Trim multiple paths based on their overlap with previously seen coordinates.
@@ -211,21 +211,25 @@ def trim_paths(
     if len(paths) < 2:
         return paths
 
+    # Trim paths
     trimmed_paths = [paths[0]]
-    coords = paths[0].copy()
+    visited_points = set(paths[0])
     for path in paths[1:]:
         for i in range(len(path) - 1, -1, -1):
             point = path[i]
-            # Closest point within tolerance in coords
-            min_distance = min(
-                np.hypot(point[0] - c[0], point[1] - c[1]) for c in coords
-            )
-            if min_distance < tolerance:
+            if point in visited_points:
                 trimmed_paths.append(path[i:])
-                coords.extend(path[i:])
+                visited_points.update(path[i:])
                 break
 
-    return trimmed_paths
+    # Simplify paths
+    simplified_paths = []
+    for path in trimmed_paths:
+        line = LineString([(x, y) for (x, y) in path])
+        simplified = line.simplify(tolerance=tolerance)
+        simplified_paths.append([(int(x), int(y)) for x, y in simplified.coords])
+
+    return simplified_paths
 
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
@@ -265,12 +269,12 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         return
 
     # Simplify paths
-    simplified_paths = []
-    for path in paths.values():
-        line = LineString([(x, y) for (y, x) in path])
-        simplified = line.simplify(tolerance=2.0)
-        simplified_paths.append([(int(x), int(y)) for x, y in simplified.coords])
-    trim_paths(simplified_paths, tolerance=config.SIMPLIFICATION_TOLERANCE)
+    print(f"Original paths: {paths}")
+    simplified_paths = simplify_paths(
+        [[(x, y) for y, x in path] for path in paths.values()],
+        tolerance=config.SIMPLIFICATION_TOLERANCE,
+    )
+    print(f"Simplified paths: {simplified_paths}")
 
     # Convert pixel locations back to metric coordinates
     metric_paths = [
@@ -300,14 +304,24 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     for x, y in last_points:
         connection_node_ids.append(split_nearest_edge(G, x, y))
 
-    # Add the first point as a node
-    prev_node_id = max(G.nodes) + 1
-    G.add_node(prev_node_id, x=map_coords[0][0][0], y=map_coords[0][0][1])
     # Add rest of the paths
     for i, path in enumerate(map_coords):
-        # First point of the path is already added as a node
-        prev_node_id = ox.nearest_nodes(G, path[0][0], path[0][1], return_dist=False)
-        node_id = max(G.nodes) + 1
+        # First node of the path
+        if i == 0:
+            # First node of the first path does not need to be connected to the graph.
+            # No need to split an edge.
+            node_id = max(G.nodes) + 1
+            G.add_node(node_id, x=path[0][0], y=path[0][1])
+        else:
+            prev_node_id = split_nearest_edge(G, path[0][0], path[0][1])
+            node_id = max(G.nodes) + 1
+            G.add_node(node_id, x=path[0][0], y=path[0][1])
+            G.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
+            G.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
+        prev_node_id = node_id
+        node_id = prev_node_id + 1
+
+        # Rest of the nodes in the path
         for x, y in path[1:]:
             G.add_node(node_id, x=x, y=y)
             G.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
