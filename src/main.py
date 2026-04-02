@@ -37,6 +37,7 @@ def handle_map_click():
         path.calc_premise_path(
             st.session_state["graph"], clicked_object["geometry"]["coordinates"]
         )
+        st.session_state["update_graph"] = True
 
 
 def main():
@@ -47,10 +48,16 @@ def main():
     # Create graph
     if "graph" not in st.session_state:
         G = osm_gis.create_road_graph()
+        st.session_state["graph"] = G
+        st.session_state["update_graph"] = True
+    # Update graph
+    if st.session_state["update_graph"]:
+        G: nx.MultiDiGraph = st.session_state["graph"]
         ox.distance.add_edge_lengths(G)
         path.add_weight(G)
         path.add_centrality(G)
         st.session_state["graph"] = G
+        st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]
 
     # Load and build the map

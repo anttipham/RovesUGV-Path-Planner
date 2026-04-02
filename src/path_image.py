@@ -476,7 +476,8 @@ def goal_mask_from_osmnx_graph(
 
     # Exclude building_access edges
     if "building_access" in edges_gdf.columns:
-        edges_gdf = edges_gdf[~edges_gdf["building_access"].fillna(False)]
+        mask = edges_gdf["building_access"].fillna(False).astype(bool)
+        edges_gdf = edges_gdf[~mask]
 
     # Clip graph edges to bounding box
     clipped_edges = gpd.clip(edges_gdf, bbox_gdf)
@@ -590,7 +591,7 @@ def calc_2d_premise_paths(
     )
 
     goal_mask = goal_mask_from_osmnx_graph(
-        G, bbox, mask_height=config.BBOX_SIZE, mask_width=config.BBOX_IMAGE_SIZE
+        G, bbox, mask_height=config.BBOX_IMAGE_SIZE, mask_width=config.BBOX_IMAGE_SIZE
     )
     goal_points = extract_goal_points(goal_mask)
 

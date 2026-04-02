@@ -114,15 +114,9 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
     return fg
 
 
-def connect_to_nearest_edge(
-    G: nx.MultiDiGraph,
-    node_id: int,
-) -> int:
+def split_nearest_edge(G: nx.MultiDiGraph, x: int, y: int) -> int:
     """
-    Split nearest edge (assumed straight) and connect an existing node to it.
-
-    Graph must have node attributes:
-        node["x"], node["y"]
+    Split nearest edge (assumed straight).
 
     Returns
     -------
@@ -138,10 +132,6 @@ def connect_to_nearest_edge(
         config.MAP_EPSG,
         always_xy=True,
     )
-
-    # Get coordinate from node
-    x = G.nodes[node_id]["x"]
-    y = G.nodes[node_id]["y"]
 
     # Project to metric CRS
     proj_x, proj_y = transformer.transform(x, y)
@@ -181,20 +171,6 @@ def connect_to_nearest_edge(
     G.add_edge(new_node_id, u, **base_attrs)
     G.add_edge(v, new_node_id, **base_attrs)
     G.add_edge(new_node_id, v, **base_attrs)
-
-    # Connect argument node to split node
-    G.add_edge(
-        new_node_id,
-        node_id,
-        foot="yes",
-        virtual="yes",
-    )
-    G.add_edge(
-        node_id,
-        new_node_id,
-        foot="yes",
-        virtual="yes",
-    )
 
     return new_node_id
 
@@ -285,44 +261,23 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     # Compute paths on the premise image and add them to the map
     paths = path_image.calc_2d_premise_paths(G, img, bbox, debug_img=True)
 
-    # def draw_comparison(
-    #     image: np.ndarray,
-    #     original_points: list[tuple[int, int]],
-    #     simplified_points: list[tuple[int, int]],
-    # ) -> None:
-    #     if image.ndim == 2:
-    #         vis = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    #     else:
-    #         vis = image.copy()
-    #     # Original (thin yellow)
-    #     for y, x in original_points:
-    #         cv2.circle(vis, (x, y), 1, (0, 255, 255), -1)
-    #     # Simplified (larger red)
-    #     cv2.polylines(vis, [np.array(simplified_points)], False, (0, 0, 255), 2)
-    #     # for y, x in simplified_points:
-    #     #     cv2.circle(vis, (x, y), 4, (0, 0, 255), -1)
-    #     cv2.imshow("Path Comparison", vis)
-    #     cv2.waitKey(0)
+    if not paths:
+        return
 
     # Simplify paths
     simplified_paths = []
     for path in paths.values():
-        line = LineString([(y, x) for (x, y) in path])
+        line = LineString([(x, y) for (y, x) in path])
         simplified = line.simplify(tolerance=2.0)
-
-        # Debug: Show original and simplified paths on the image
-        simplified_paths.append([(int(x), int(y)) for y, x in simplified.coords])
-        # # print(f"Original path: {path}")
-        # print(f"Simplified path: {simplified_points}")
-        # draw_comparison(img, path, [(int(y), int(x)) for x, y in simplified_points])
-    trim_paths(simplified_paths)
+        simplified_paths.append([(int(x), int(y)) for x, y in simplified.coords])
+    trim_paths(simplified_paths, tolerance=config.SIMPLIFICATION_TOLERANCE)
 
     # Convert pixel locations back to metric coordinates
     metric_paths = [
         [
             (
                 bbox[0] + (bbox[2] - bbox[0]) * (x / config.BBOX_IMAGE_SIZE),
-                bbox[1] + (bbox[3] - bbox[1]) * (y / config.BBOX_IMAGE_SIZE),
+                bbox[3] - (bbox[3] - bbox[1]) * (y / config.BBOX_IMAGE_SIZE),
             )
             for x, y in path
         ]
@@ -339,23 +294,26 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         [transformer.transform(x, y) for x, y in path] for path in metric_paths
     ]
 
-    # Make a graph for virtual paths on the premise area
-    H = nx.MultiDiGraph()
+    # Add last nodes of the paths as new nodes to the graph
+    last_points = [path[-1] for path in map_coords]
+    connection_node_ids = []
+    for x, y in last_points:
+        connection_node_ids.append(split_nearest_edge(G, x, y))
+
     # Add the first point as a node
     prev_node_id = max(G.nodes) + 1
-    H.add_node(prev_node_id, x=map_coords[0][0], y=map_coords[0][1])
+    G.add_node(prev_node_id, x=map_coords[0][0][0], y=map_coords[0][0][1])
     # Add rest of the paths
-    for path in map_coords:
+    for i, path in enumerate(map_coords):
         # First point of the path is already added as a node
-        prev_node_id = ox.nearest_nodes(H, path[0][0], path[0][1], return_dist=False)
+        prev_node_id = ox.nearest_nodes(G, path[0][0], path[0][1], return_dist=False)
+        node_id = max(G.nodes) + 1
         for x, y in path[1:]:
-            node_id = prev_node_id + 1
-            H.add_node(node_id, x=x, y=y)
-            H.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
-            H.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
+            G.add_node(node_id, x=x, y=y)
+            G.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
+            G.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
             prev_node_id = node_id
-        # Connect the last point to the nearest edge in the map graph
-        G.add_node(node_id, x=x, y=y)
-        connect_to_nearest_edge(G, node_id)
-    # Update the main graph with the new nodes and edges from the premise paths
-    G.update(H)
+            node_id = prev_node_id + 1
+        # Connect the end of the path to the connection node on the road graph
+        G.add_edge(prev_node_id, connection_node_ids[i], foot="yes", virtual="yes")
+        G.add_edge(connection_node_ids[i], prev_node_id, foot="yes", virtual="yes")

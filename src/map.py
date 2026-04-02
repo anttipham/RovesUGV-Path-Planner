@@ -41,7 +41,7 @@ def _add_tile_layers(m: folium.Map) -> None:
         fmt="image/png",
         name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
         overlay=False,
-        show=True,
+        show=False,
     ).add_to(m)
 
     # Seinäjoki topographic map
