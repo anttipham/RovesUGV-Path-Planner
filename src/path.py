@@ -199,16 +199,69 @@ def connect_to_nearest_edge(
     return new_node_id
 
 
+def trim_paths(
+    paths: list[list[tuple[int, int]]],
+    tolerance: float = 3.0,
+) -> list[list[tuple[int, int]]]:
+    """
+    Trim multiple paths based on their overlap with previously seen coordinates.
+
+    The first path is kept unchanged. For each subsequent path, the function
+    finds the last point (iterating from the end) that is within `tolerance`
+    (Euclidean distance) of any coordinate already seen in earlier paths.
+    The path is then trimmed to start from that point onward.
+
+    All retained segments are accumulated into a shared coordinate list so that
+    later paths are compared against all previously accepted points.
+
+    Parameters
+    ----------
+    paths : list[list[tuple[int, int]]]
+        A list of paths, where each path is a list of (x, y) integer coordinates.
+        The first path is used as the reference and is not modified.
+    tolerance : float, default=3.0
+        Maximum Euclidean distance for considering two points as matching.
+
+    Returns
+    -------
+    list[list[tuple[int, int]]]
+        A list of trimmed paths:
+        - The first path is unchanged.
+        - Each subsequent path contains only the suffix starting from its
+          last point that matches (within tolerance) any previously accepted
+          coordinate.
+        - Paths with no matching point are omitted.
+    """
+    if len(paths) < 2:
+        return paths
+
+    trimmed_paths = [paths[0]]
+    coords = paths[0].copy()
+    for path in paths[1:]:
+        for i in range(len(path) - 1, -1, -1):
+            point = path[i]
+            # Closest point within tolerance in coords
+            min_distance = min(
+                np.hypot(point[0] - c[0], point[1] - c[1]) for c in coords
+            )
+            if min_distance < tolerance:
+                trimmed_paths.append(path[i:])
+                coords.extend(path[i:])
+                break
+
+    return trimmed_paths
+
+
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     # Download image of the premise area
     x, y = pyproj.Transformer.from_crs(config.MAP_EPSG, config.METRIC_EPSG).transform(
         *coord[::-1]
     )
     bbox = (
-        x - config.BBOX_SIZE,
-        y - config.BBOX_SIZE,
-        x + config.BBOX_SIZE,
-        y + config.BBOX_SIZE,
+        x - config.BBOX_SIZE // 2,
+        y - config.BBOX_SIZE // 2,
+        x + config.BBOX_SIZE // 2,
+        y + config.BBOX_SIZE // 2,
     )
     # print(f"Calculating premise bbox: {x-500},{y-500},{x+500},{y+500}")
     url = "http://localhost:8080/service"
@@ -230,7 +283,7 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
 
     # Compute paths on the premise image and add them to the map
-    paths = path_image.calc_2d_premise_paths(G, img, bbox)
+    paths = path_image.calc_2d_premise_paths(G, img, bbox, debug_img=True)
 
     # def draw_comparison(
     #     image: np.ndarray,
@@ -251,11 +304,58 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
     #     cv2.imshow("Path Comparison", vis)
     #     cv2.waitKey(0)
 
+    # Simplify paths
+    simplified_paths = []
     for path in paths.values():
         line = LineString([(y, x) for (x, y) in path])
         simplified = line.simplify(tolerance=2.0)
-        simplified_points = [(int(y), int(x)) for y, x in simplified.coords]
-        # print(f"Original path: {path}")
-        # print(f"Simplified path: {simplified_points}")
 
-        # draw_comparison(img, path, simplified_points)
+        # Debug: Show original and simplified paths on the image
+        simplified_paths.append([(int(x), int(y)) for y, x in simplified.coords])
+        # # print(f"Original path: {path}")
+        # print(f"Simplified path: {simplified_points}")
+        # draw_comparison(img, path, [(int(y), int(x)) for x, y in simplified_points])
+    trim_paths(simplified_paths)
+
+    # Convert pixel locations back to metric coordinates
+    metric_paths = [
+        [
+            (
+                bbox[0] + (bbox[2] - bbox[0]) * (x / config.BBOX_IMAGE_SIZE),
+                bbox[1] + (bbox[3] - bbox[1]) * (y / config.BBOX_IMAGE_SIZE),
+            )
+            for x, y in path
+        ]
+        for path in simplified_paths
+    ]
+
+    # Convert back to map CRS
+    transformer = pyproj.Transformer.from_crs(
+        config.METRIC_EPSG,
+        config.MAP_EPSG,
+        always_xy=True,
+    )
+    map_coords: list[list[tuple[float, float]]] = [
+        [transformer.transform(x, y) for x, y in path] for path in metric_paths
+    ]
+
+    # Make a graph for virtual paths on the premise area
+    H = nx.MultiDiGraph()
+    # Add the first point as a node
+    prev_node_id = max(G.nodes) + 1
+    H.add_node(prev_node_id, x=map_coords[0][0], y=map_coords[0][1])
+    # Add rest of the paths
+    for path in map_coords:
+        # First point of the path is already added as a node
+        prev_node_id = ox.nearest_nodes(H, path[0][0], path[0][1], return_dist=False)
+        for x, y in path[1:]:
+            node_id = prev_node_id + 1
+            H.add_node(node_id, x=x, y=y)
+            H.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
+            H.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
+            prev_node_id = node_id
+        # Connect the last point to the nearest edge in the map graph
+        G.add_node(node_id, x=x, y=y)
+        connect_to_nearest_edge(G, node_id)
+    # Update the main graph with the new nodes and edges from the premise paths
+    G.update(H)
