@@ -4,4 +4,5 @@ examples
 **/__pycache__
 *.pyc
 **/*.graphml
-imgs
+**/*.png
+.vscode
