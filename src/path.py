@@ -4,16 +4,71 @@ Everything related to algorithms and paths are here
 
 import cv2
 import folium
+import geopandas as gpd
 import networkx as nx
 import numpy as np
 import osmnx as ox
 import pyproj
 import requests
+import shapely
 from shapely.geometry import LineString, Point
 
 import config
 import osm_gis
 import path_image
+
+
+def update_building_access_nodes(
+    G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame
+) -> None:
+    # Remove existing building access edges
+    edges_to_remove = [
+        (u, v, k)
+        for u, v, k, data in G.edges(keys=True, data=True)
+        if data.get("building_access") is True
+    ]
+    G.remove_edges_from(edges_to_remove)
+
+    # Store existing building access nodes and remove them from the graph
+    existing_access_nodes = {
+        node: data
+        for node, data in G.nodes(data=True)
+        if data.get("building_access") is True
+    }
+    G.remove_nodes_from(existing_access_nodes.keys())
+
+    # Find the nearest point to be used as access way for each building
+    access_ways: dict[int, tuple[int, dict]] = {}
+    for row in building_gdf.itertuples():
+        id = row.Index[1]
+
+        # Find the building node by id
+        if id in existing_access_nodes:
+            node = existing_access_nodes[id]
+        else:
+            # If it doesn't exist, add the centroid of a building as a node to the graph
+            centroid = shapely.centroid(row.geometry)
+            node = {
+                "y": centroid.y,
+                "x": centroid.x,
+                "building_access": True,
+            }
+
+        # Attach the centroid to the nearest node excluding the node itself
+        nearest_node = ox.distance.nearest_nodes(G, node["x"], node["y"])
+        access_ways[id] = (nearest_node, node)
+
+    # Add the access ways to the graph
+    for node1, (node2, node_data) in access_ways.items():
+        # Add building centroid to graph
+        if node1 not in G.nodes():
+            G.add_node(node1, **node_data)
+
+        # If the building node is already connected to the graph, skip it
+        if G.edges(node1):
+            continue
+        G.add_edge(node1, node2, foot="yes", building_access=True)
+        G.add_edge(node2, node1, foot="yes", building_access=True)
 
 
 def add_weight(G: nx.MultiDiGraph) -> None:
@@ -177,7 +232,8 @@ def split_nearest_edge(G: nx.MultiDiGraph, x: int, y: int) -> int:
 
 def simplify_paths(
     paths: list[list[tuple[int, int]]],
-    tolerance,
+    combination_tolerance: float,
+    line_tolerance: float,
 ) -> list[list[tuple[int, int]]]:
     """
     Trim multiple paths based on their overlap with previously seen coordinates.
@@ -213,20 +269,24 @@ def simplify_paths(
 
     # Trim paths
     trimmed_paths = [paths[0]]
-    visited_points = set(paths[0])
+    visited_points = list(paths[0])
     for path in paths[1:]:
         for i in range(len(path) - 1, -1, -1):
             point = path[i]
-            if point in visited_points:
+            if any(
+                ((point[0] - vp[0]) ** 2 + (point[1] - vp[1]) ** 2) ** 0.5
+                <= combination_tolerance
+                for vp in visited_points
+            ):
                 trimmed_paths.append(path[i:])
-                visited_points.update(path[i:])
+                visited_points.extend(path[i:])
                 break
 
     # Simplify paths
     simplified_paths = []
     for path in trimmed_paths:
         line = LineString([(x, y) for (x, y) in path])
-        simplified = line.simplify(tolerance=tolerance)
+        simplified = line.simplify(tolerance=line_tolerance)
         simplified_paths.append([(int(x), int(y)) for x, y in simplified.coords])
 
     return simplified_paths
@@ -269,12 +329,11 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         return
 
     # Simplify paths
-    print(f"Original paths: {paths}")
     simplified_paths = simplify_paths(
         [[(x, y) for y, x in path] for path in paths.values()],
-        tolerance=config.SIMPLIFICATION_TOLERANCE,
+        combination_tolerance=config.SIMPLIFICATION_COMBINATION_TOLERANCE,
+        line_tolerance=config.SIMPLIFICATION_LINE_TOLERANCE,
     )
-    print(f"Simplified paths: {simplified_paths}")
 
     # Convert pixel locations back to metric coordinates
     metric_paths = [

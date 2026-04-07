@@ -1,5 +1,23 @@
 """
-Handles streamlit stuff
+Handles streamlit stuff.
+
+st.session state structure:
+{
+    "map": {
+        "last_active_drawing": {
+            "bbox": [...],
+            "geometry": {
+                "type": "...",
+                "coordinates": [...]
+            },
+            "id": "..."
+            "properties": {...},
+            "type": "Feature"
+        }
+    },
+    "graph": <networkx graph object>,
+    "update_graph": True/False
+}
 """
 
 import time
@@ -53,6 +71,7 @@ def main():
     # Update graph
     if st.session_state["update_graph"]:
         G: nx.MultiDiGraph = st.session_state["graph"]
+        path.update_building_access_nodes(G, osm_gis.get_building_gdf())
         ox.distance.add_edge_lengths(G)
         path.add_weight(G)
         path.add_centrality(G)
