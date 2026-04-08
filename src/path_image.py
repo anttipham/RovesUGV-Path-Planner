@@ -474,9 +474,9 @@ def goal_mask_from_osmnx_graph(
         crs=config.METRIC_EPSG,
     )
 
-    # Exclude building_access edges
-    if "building_access" in edges_gdf.columns:
-        mask = edges_gdf["building_access"].fillna(False).astype(bool)
+    # Exclude temporary connections
+    if "temporary_connection" in edges_gdf.columns:
+        mask = edges_gdf["temporary_connection"].fillna(False).astype(bool)
         edges_gdf = edges_gdf[~mask]
 
     # Clip graph edges to bounding box

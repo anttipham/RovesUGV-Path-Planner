@@ -18,14 +18,12 @@ import osm_gis
 import path_image
 
 
-def update_building_access_nodes(
-    G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame
-) -> None:
-    # Remove existing building access edges
+def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -> None:
+    # Remove existing temporary connections to the building access nodes
     edges_to_remove = [
         (u, v, k)
         for u, v, k, data in G.edges(keys=True, data=True)
-        if data.get("building_access") is True
+        if data.get("temporary_connection") is True
     ]
     G.remove_edges_from(edges_to_remove)
 
@@ -67,8 +65,8 @@ def update_building_access_nodes(
         # If the building node is already connected to the graph, skip it
         if G.edges(node1):
             continue
-        G.add_edge(node1, node2, foot="yes", building_access=True)
-        G.add_edge(node2, node1, foot="yes", building_access=True)
+        G.add_edge(node1, node2, foot="yes", temporary_connection=True)
+        G.add_edge(node2, node1, foot="yes", temporary_connection=True)
 
 
 def add_weight(G: nx.MultiDiGraph) -> None:
