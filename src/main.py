@@ -68,13 +68,16 @@ def main():
         G = osm_gis.create_road_graph()
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
+
     # Update graph
     if st.session_state["update_graph"]:
         G: nx.MultiDiGraph = st.session_state["graph"]
+
         path.update_building_access(G, osm_gis.get_building_gdf())
         ox.distance.add_edge_lengths(G)
-        path.add_weight(G)
-        path.add_centrality(G)
+        path.add_all_building_path_pairs(G)
+        path.add_betweenness_centrality(G)
+
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]

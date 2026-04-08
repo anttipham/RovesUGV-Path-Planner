@@ -2,6 +2,11 @@
 Everything related to algorithms and paths are here
 """
 
+import collections
+import heapq
+import math
+from typing import Callable, Iterable
+
 import cv2
 import folium
 import geopandas as gpd
@@ -65,37 +70,194 @@ def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -
         # If the building node is already connected to the graph, skip it
         if G.edges(node1):
             continue
-        G.add_edge(node1, node2, foot="yes", temporary_connection=True)
-        G.add_edge(node2, node1, foot="yes", temporary_connection=True)
+        G.add_edge(node1, node2, ugv_access="yes", temporary_connection=True)
+        G.add_edge(node2, node1, ugv_access="yes", temporary_connection=True)
 
 
-def add_weight(G: nx.MultiDiGraph) -> None:
+def turn_aware_dijkstra(
+    G: nx.MultiDiGraph,
+    source: int,
+    targets: Iterable[int],
+    *,
+    cost: Callable[
+        [tuple[int, int, int] | None, tuple[int, int, int], nx.MultiDiGraph],
+        float,
+    ],
+) -> tuple[dict[int, float], dict[int, list[tuple[int, int, int]]]]:
     """
-    TODO: Add weight for junctions
+    Compute shortest paths from one source to many targets in a MultiDiGraph,
+    where the traversal cost of an edge may depend on the previously used edge.
+
+    Each search state is:
+        (current_node, incoming_edge)
+
+    This is necessary for turn-aware routing, because arriving at the same node
+    through different incoming edges can lead to different onward costs.
+
+    Parameters
+    ----------
+    G
+        Directed multigraph.
+    source
+        Source node id.
+    targets
+        Target node ids.
+    cost
+        Function that returns the full traversal cost of taking curr_edge after
+        prev_edge.
+
+            cost(prev_edge, curr_edge, G) -> non-negative float
+
+        - prev_edge is None for the first move from the source
+        - curr_edge is (u, v, key)
+
+    Returns
+    -------
+    distances, paths
+        distances[target] = shortest distance from source to target
+        paths[target] = shortest edge path as a list of (u, v, key)
+
+        Unreachable targets get:
+            distance = math.inf
+            path = []
     """
-    edge: dict
-    for edge in G.edges.values():
-        edge["weight"] = edge["length"]
-        # Add more weight if the path is not for pedestrians
-        if edge.get("foot") not in ("yes", "designated"):
-            edge["weight"] *= 3
 
+    # Validate
+    if not isinstance(G, nx.MultiDiGraph):
+        raise TypeError("G must be a nx.MultiDiGraph")
+    if source not in G:
+        raise nx.NodeNotFound(f"Source node {source!r} not in graph")
 
-def add_centrality(G: nx.MultiDiGraph) -> None:
-    # Calculate centrality for only buildings
-    buildings = [
-        node
-        for node, is_building_access in G.nodes(data="building_access")
-        if is_building_access
-    ]
-    centrality = nx.edge_betweenness_centrality_subset(
-        G,
-        sources=buildings,
-        targets=buildings,
-        weight="weight",
-    )
-    for key, edge in G.edges.items():
-        edge["centrality"] = centrality[key]
+    targets = set(targets)
+    missing = [t for t in targets if t not in G]
+    if missing:
+        raise nx.NodeNotFound(f"Target nodes not in graph: {missing!r}")
+
+    # Initial state:
+    # - current node = source
+    # - previous edge = None, because no edge has been taken yet
+    start_state: tuple[int, tuple[int, int, int] | None] = (source, None)
+
+    # Shortest known distance to each expanded state.
+    # Key = (node, incoming_edge)
+    dist: dict[tuple[int, tuple[int, int, int] | None], float] = {start_state: 0.0}
+
+    # Parent pointer for path reconstruction:
+    # parent[next_state] = previous_state
+    parent: dict[
+        tuple[int, tuple[int, int, int] | None],
+        tuple[int, tuple[int, int, int] | None] | None,
+    ] = {start_state: None}
+
+    # Edge used to enter each state.
+    # For start_state, there is no entering edge.
+    used_edge: dict[
+        tuple[int, tuple[int, int, int] | None],
+        tuple[int, int, int] | None,
+    ] = {start_state: None}
+
+    # Priority queue entries are:
+    #   (best_distance_so_far, tie_breaker, state)
+    #
+    # The tie_breaker avoids Python needing to compare the state tuples when
+    # two distances are equal.
+    heap: list[tuple[float, int, tuple[int, tuple[int, int, int] | None]]] = []
+    counter = 0
+    heapq.heappush(heap, (0.0, counter, start_state))
+
+    # For each target node, store the first state popped from the heap.
+    # In Dijkstra, the first popped state is optimal.
+    best_target_state: dict[int, tuple[int, tuple[int, int, int] | None]] = {}
+
+    # Store the optimal distance for each target node.
+    best_target_dist: dict[int, float] = {}
+
+    # Targets still not finalized.
+    # Once all are found, we can stop early.
+    remaining = set(targets)
+
+    # Main Dijkstra loop.
+    while heap and remaining:
+        cur_dist, _, state = heapq.heappop(heap)
+        node, prev_edge = state
+
+        # Skip stale heap entries.
+        # This happens when a better distance to the same state was pushed later.
+        if cur_dist != dist.get(state, math.inf):
+            continue
+
+        # If this popped state reaches a target node, it is the optimal arrival
+        # for that target, so record it.
+        if node in remaining:
+            best_target_state[node] = state
+            best_target_dist[node] = cur_dist
+            remaining.remove(node)
+
+            # Early exit: all requested targets have been finalized.
+            if not remaining:
+                break
+
+        # Relax all outgoing edges from the current node.
+        for _, next_node, key in G.out_edges(node, keys=True):
+            # Current candidate edge to traverse.
+            curr_edge = (node, next_node, key)
+
+            # Full step cost includes both edge cost and any turn cost.
+            step_cost = cost(prev_edge, curr_edge, G)
+
+            # Dijkstra requires non-negative costs.
+            if step_cost < 0:
+                raise ValueError("Dijkstra requires non-negative costs")
+
+            # Total distance if we take this edge.
+            new_dist = cur_dist + step_cost
+
+            # New state after traversing curr_edge:
+            # we arrive at nbr, and curr_edge becomes the previous edge.
+            next_state = (next_node, curr_edge)
+
+            # Standard Dijkstra relaxation.
+            if new_dist < dist.get(next_state, math.inf):
+                dist[next_state] = new_dist
+                parent[next_state] = state
+                used_edge[next_state] = curr_edge
+
+                # Push improved state to heap.
+                counter += 1
+                heapq.heappush(heap, (new_dist, counter, next_state))
+
+    # Final outputs keyed only by target node.
+    distances: dict[int, float] = {}
+    paths: dict[int, list[tuple[int, int, int]]] = {}
+
+    # Build result for each requested target.
+    for target in targets:
+        # Unreachable target.
+        if target not in best_target_state:
+            distances[target] = math.inf
+            paths[target] = []
+            continue
+
+        # Optimal distance to target.
+        distances[target] = best_target_dist[target]
+
+        # Reconstruct optimal edge path by walking parent pointers backward
+        # from the best final state.
+        state = best_target_state[target]
+        edge_path: list[tuple[int, int, int]] = []
+
+        while state != start_state:
+            edge = used_edge[state]
+            if edge is None:
+                break
+            edge_path.append(edge)
+            state = parent[state]
+
+        # Reconstruction was backward, so reverse it.
+        edge_path.reverse()
+        paths[target] = edge_path
+
+    return distances, paths
 
 
 def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
@@ -110,28 +272,119 @@ def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
     return chosen_buildings
 
 
-def calc_path(
+def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
+    def cost(
+        prev_edge: tuple[int, int, int] | None,
+        curr_edge: tuple[int, int, int],
+        G: nx.MultiDiGraph,
+    ) -> float:
+        """
+        Function that returns the full traversal cost of taking curr_edge after prev_edge.
+
+        cost(prev_edge, curr_edge, G) -> non-negative float
+
+        prev_edge is None for the first move from the source
+        curr_edge is (u, v, key)
+
+        Args:
+            u: Source node of the edge.
+            v: Target node of the edge.
+            data: Dictionary of edge attributes.
+
+        Returns:
+            The weight of the edge, or 1 if not specified.
+        """
+        curr_node = curr_edge[1]
+        prev_node = curr_edge[0]
+
+        # Add base cost for the edge
+        penalty = config.COST_SIDEWALK * G.edges[curr_edge]["length"]
+
+        if "ugv_access" not in G.edges[curr_edge]:
+            print(
+                f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_node]} and {G.nodes[prev_node]} is missing 'ugv_access' attribute"
+            )
+        # Add penalty for roadways
+        if not G.edges[curr_edge]["ugv_access"]:
+            penalty *= config.COST_ROADWAY
+
+        # Skip turn costs for the first move from the source
+        if prev_edge is None:
+            return penalty
+
+        # Identify crossings where sidewalks intersect with roadways by checking
+        # prev_node neighboring edge attributes
+        prev_node_sidewalk_attributes = set(
+            ugv_access
+            for _, _, _, ugv_access in G.out_edges(
+                prev_node, keys=True, data="ugv_access", default=False
+            )
+        )
+        is_crossing = len(prev_node_sidewalk_attributes) > 1
+
+        # Add penalty for crossings
+        if is_crossing:
+            match G.nodes[prev_node].get("crossing"):
+                case "traffic_signals":
+                    penalty += 0
+                case "zebra" | "marked":
+                    penalty += 5
+                case _:
+                    penalty += 15
+
+        return penalty
+
+    # Building node IDs
+    chosen_buildings = [
+        node
+        for node, is_building_access in G.nodes(data="building_access")
+        if is_building_access
+    ]
+
+    all_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
+    for source in chosen_buildings:
+        distances, paths = turn_aware_dijkstra(G, source, chosen_buildings, cost=cost)
+        all_pairs.update({(source, target): path for target, path in paths.items()})
+
+    G.graph["all_building_path_pairs"] = all_pairs
+
+
+def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
+    all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = (
+        G.graph["all_building_path_pairs"]
+    )
+    centralities = collections.Counter(
+        edge for path in all_building_path_pairs.values() for edge in path
+    )
+
+    for edge in G.edges(keys=True):
+        G.edges[edge]["centrality"] = centralities.get(edge, 0)
+
+
+# def calc_path(
+#     G: nx.MultiDiGraph,
+#     source: int | None,
+#     target: int | None,
+# ) -> list[tuple[int, int, int]]:
+#     if None in (source, target):
+#         return []
+
+#     shortest_node_path = ox.shortest_path(G, source, target, weight="weight")
+#     # Calculate the correct key of MultiDiGraph
+#     shortest_edge_path: list[tuple[int, int, int]] = []
+#     for u, v in zip(shortest_node_path[:-1], shortest_node_path[1:]):
+#         # Find the minimum-weight edge between u and v
+#         min_data = (float("inf"), 0)
+#         for key, value in G[u][v].items():
+#             min_data = min(min_data, (value["weight"], key))
+#         shortest_edge_path.append((u, v, min_data[1]))
+
+#     return shortest_edge_path
+
+
+def show_path(
     G: nx.MultiDiGraph,
-    source: int | None,
-    target: int | None,
-) -> list[tuple[int, int, int]]:
-    if None in (source, target):
-        return []
-
-    shortest_node_path = ox.shortest_path(G, source, target, weight="weight")
-    # Calculate the correct key of MultiDiGraph
-    shortest_edge_path: list[tuple[int, int, int]] = []
-    for u, v in zip(shortest_node_path[:-1], shortest_node_path[1:]):
-        # Find the minimum-weight edge between u and v
-        min_data = (float("inf"), 0)
-        for key, value in G[u][v].items():
-            min_data = min(min_data, (value["weight"], key))
-        shortest_edge_path.append((u, v, min_data[1]))
-
-    return shortest_edge_path
-
-
-def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
+) -> folium.FeatureGroup:
     fg = folium.FeatureGroup(name=config.PATH_LAYER_NAME)
     ids = get_chosen_building_nodes(G)
 
@@ -153,7 +406,7 @@ def show_path(G: nx.MultiDiGraph) -> folium.FeatureGroup:
         return fg
 
     # Show shortest path between buildings
-    edges = calc_path(G, ids[0], ids[1])
+    edges = G.graph["all_building_path_pairs"].get((ids[0], ids[1]), [])
     path_graph = G.edge_subgraph(edges)
     folium.GeoJson(
         ox.graph_to_gdfs(path_graph, nodes=False),
@@ -373,18 +626,22 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
             prev_node_id = split_nearest_edge(G, path[0][0], path[0][1])
             node_id = max(G.nodes) + 1
             G.add_node(node_id, x=path[0][0], y=path[0][1])
-            G.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
-            G.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
+            G.add_edge(prev_node_id, node_id, ugv_access="yes", virtual="yes")
+            G.add_edge(node_id, prev_node_id, ugv_access="yes", virtual="yes")
         prev_node_id = node_id
         node_id = prev_node_id + 1
 
         # Rest of the nodes in the path
         for x, y in path[1:]:
             G.add_node(node_id, x=x, y=y)
-            G.add_edge(prev_node_id, node_id, foot="yes", virtual="yes")
-            G.add_edge(node_id, prev_node_id, foot="yes", virtual="yes")
+            G.add_edge(prev_node_id, node_id, ugv_access="yes", virtual="yes")
+            G.add_edge(node_id, prev_node_id, ugv_access="yes", virtual="yes")
             prev_node_id = node_id
             node_id = prev_node_id + 1
         # Connect the end of the path to the connection node on the road graph
-        G.add_edge(prev_node_id, connection_node_ids[i], foot="yes", virtual="yes")
-        G.add_edge(connection_node_ids[i], prev_node_id, foot="yes", virtual="yes")
+        G.add_edge(
+            prev_node_id, connection_node_ids[i], ugv_access="yes", virtual="yes"
+        )
+        G.add_edge(
+            connection_node_ids[i], prev_node_id, ugv_access="yes", virtual="yes"
+        )

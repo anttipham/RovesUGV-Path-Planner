@@ -24,8 +24,13 @@ TAGS_WAY = ["foot", "bicycle"]
 for tag in TAGS_WAY:
     if tag not in ox.settings.useful_tags_way:
         ox.settings.useful_tags_way += [tag]
+SIDEWALK_FOOT_TAG_VALUES = ["yes", "designated"]
 MAP_EPSG = "EPSG:4326"
 METRIC_EPSG = "EPSG:3857"
+
+# Cost constants
+COST_SIDEWALK = 0.015
+COST_ROADWAY = 3
 
 # 2D pathfinding constants
 TRAVERSABLE_THRESHOLD = 98

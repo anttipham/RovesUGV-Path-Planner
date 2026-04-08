@@ -28,4 +28,11 @@ def create_road_graph() -> nx.MultiDiGraph:
         truncate_by_edge=True,
         simplify=False,
     )
+
+    # Add ugv_access attribute to edges where foot access is allowed
+    for u, v, key, data in G.edges(keys=True, data=True):
+        if data.get("foot") in config.SIDEWALK_FOOT_TAG_VALUES:
+            data["ugv_access"] = True
+        else:
+            data["ugv_access"] = False
     return G
