@@ -411,8 +411,8 @@ def show_path(
     folium.GeoJson(
         ox.graph_to_gdfs(path_graph, nodes=False),
         style_function=lambda _: {
-            "color": "red",
-            "weight": 3,
+            "color": "#007AD1",
+            "weight": 4,
             "opacity": 1,
         },
     ).add_to(fg)
