@@ -3,7 +3,7 @@ Everything related to drawing to the map and folium library is here.
 """
 
 import math
-
+import matplotlib.pyplot as plt
 import folium
 import networkx as nx
 import osmnx as ox
@@ -98,11 +98,12 @@ def make_buildings() -> folium.GeoJson:
 
 
 def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
-    max_log_centrality = math.log(
+    color_map = plt.get_cmap("Reds")
+    max_log_centrality = math.log2(
         max((val for _, _, val in G.edges(data="centrality") if val != 0))
     )
-    # Decrement by 1 to remove the building itself.
-    # The same building doesn't need paths to itself.
+
+    # Set minimum log centrality to be the log of the number of building accesses
     buildings_num = len(
         [
             node
@@ -110,26 +111,30 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
             if is_building_access
         ]
     )
+    # The same building doesn't need paths to itself.
+    # Decrement by 1 to remove the building itself.
     building_access_num = buildings_num - 1
-    min_log_centrality = math.log(building_access_num)
+    min_log_centrality = math.log2(building_access_num)
 
     def style(feature):
-        # Use more red if the centrality is higher, and scale centrality to a log scale
         centrality = feature["properties"]["centrality"]
-        # Use min centrality as the lower range
+
         if centrality <= building_access_num:
+            # Use min centrality as the lower range
             log_centrality = min_log_centrality
         else:
-            log_centrality = math.log(centrality)
+            # Scale centrality to log scale
+            log_centrality = math.log2(centrality)
 
+        # Normalize log centrality to [0.0, 1.0] for color mapping
         log_centrality_normalized = (log_centrality - min_log_centrality) / (
             max_log_centrality - min_log_centrality
         )
 
         # Set road style
-        blue = int(0xFF * log_centrality_normalized)
-        thickness = int(3 * log_centrality_normalized) + 2
-        color = f"#0000{blue:02x}"
+        red, green, blue = color_map(log_centrality_normalized)[:3]
+        thickness = int(3 * log_centrality_normalized) + 1
+        color = f"#{int(red*255):02x}{int(green*255):02x}{int(blue*255):02x}"
         return {
             "color": color,
             "weight": thickness,
