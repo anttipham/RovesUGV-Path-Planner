@@ -23,10 +23,6 @@ def create_editable_road_layer() -> folium.FeatureGroup:
     editable_road_layer = folium.FeatureGroup(
         name=config.DRAW_LAYER_NAME,
     )
-
-    # TODO: Load a custom map of roads for editing access ways
-    # osm_graph = osm_gis.create_road_graph()
-    # nodes, edges = ox.graph_to_gdfs(osm_graph)
     edges = gpd.GeoDataFrame()
 
     # Add edges and their metadata to the editable road layer
@@ -42,24 +38,25 @@ def create_editable_road_layer() -> folium.FeatureGroup:
 
 
 def add_draw_plugin(m: folium.Map) -> None:
-    # Add JavaScript events to Draw plugin
-    handlers = {
-        "draw:created": on_create,
-    }
-    m.on(**handlers)
+    # # Add JavaScript events to Draw plugin
+    # handlers = {
+    #     "draw:created": on_create,
+    # }
+    # m.on(**handlers)
 
     # Add editable road layer to the map
     road_layer = create_editable_road_layer().add_to(m)
     Draw(
-        export=True,
+        export=False,
         filename="roves_ugv_map_data.geojson",
         feature_group=road_layer,
         draw_options={
-            "polyline": True,
-            "polygon": True,
+            "polyline": False,
+            "polygon": False,
             "rectangle": False,
             "circle": False,
             "marker": True,
             "circlemarker": False,
         },
+        edit_options={"edit": False, "remove": False},
     ).add_to(m)

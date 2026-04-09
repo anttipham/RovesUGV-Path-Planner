@@ -76,21 +76,22 @@ def main():
         path.update_building_access(G, osm_gis.get_building_gdf())
         osm_gis.add_custom_attributes(G)
 
-        # path.add_all_building_path_pairs(G)
-        # path.add_betweenness_centrality(G)
-
-        # Recalculate paths and centrality until the paths converge, i.e. centrality
-        # doesn't change anymore
-        old_centrality = G.graph.get("max_centrality", -1)
-        i = 0
-        while old_centrality != G.graph.get("max_centrality", -2):
-            old_centrality = G.graph.get("max_centrality", -2)
+        if config.COST_CENTRALITY_FACTOR == 0:
             path.add_all_building_path_pairs(G)
             path.add_betweenness_centrality(G)
-            i += 1
-            print(
-                f"Centrality iteration {i}, max centrality: {G.graph['max_centrality']}"
-            )
+        else:
+            # Recalculate paths and centrality until the paths converge, i.e. centrality
+            # doesn't change anymore
+            old_centrality = G.graph.get("max_centrality", -1)
+            i = 0
+            while old_centrality != G.graph.get("max_centrality", -2):
+                old_centrality = G.graph.get("max_centrality", -2)
+                path.add_all_building_path_pairs(G)
+                path.add_betweenness_centrality(G)
+                i += 1
+                print(
+                    f"Centrality iteration {i}, max centrality: {G.graph['max_centrality']}"
+                )
 
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
@@ -98,29 +99,6 @@ def main():
 
     # Load and build the map
     m = map.build_map(G)
-
-    # Display nodes in map for debugging
-    H = G.subgraph(
-        [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
-    )
-    gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
-    folium.GeoJson(
-        gdf,
-        style_function=lambda _: {
-            "fillColor": "blue",
-            "color": "black",
-            "weight": 3,
-            "fillOpacity": 0.5,
-        },
-    ).add_to(m)
-
-    # Presentation markers
-    # markers = folium.FeatureGroup("Yritykset")
-    # for name, coords in config.MARKERS.items():
-    #     node = ox.nearest_nodes(G, coords[1], coords[0])
-    #     node_attr = G.nodes[node]
-    #     folium.Marker((node_attr["y"], node_attr["x"]), tooltip=name).add_to(markers)
-    # markers.add_to(m)
 
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
@@ -160,16 +138,6 @@ def main():
 
     st.header("Map interaction data:")
     st.write(st.session_state)
-    # st_session_state = {
-    #     "map": {
-    #         "last_active_drawing": {
-    #             "type": "Feature",
-    #             "properties": {"id": 1774776370760},
-    #             "geometry": {"type": "Point", "coordinates": [22.875037, 62.786973]},
-    #         }
-    #     },
-    #     "graph": "<networkx.classes.multidigraph.MultiDiGraph object at 0x00000191F0607E00>",
-    # }
 
 
 if __name__ == "__main__":

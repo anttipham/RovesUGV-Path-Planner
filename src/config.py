@@ -18,6 +18,7 @@ DRAW_LAYER_NAME = "Piirrokset"
 BUILDING_LAYER_NAME = "Rakennukset"
 ROAD_LAYER_NAME = "Tiet"
 PATH_LAYER_NAME = "Reitti"
+CROSSINGS_LAYER_NAME = "Risteykset"
 
 # OSMnx constants
 TAGS_WAY = ["foot", "bicycle"]
@@ -35,7 +36,7 @@ COST_TRAFFIC_SIGNALS = 0
 COST_ZEBRA_CROSSING = 2
 COST_UNCONTROLLED_CROSSING = 5
 COST_ROADWAY_CROSSING = 30
-COST_CENTRALITY_FACTOR = 3
+COST_CENTRALITY_FACTOR = 1
 
 # 2D pathfinding constants
 TRAVERSABLE_THRESHOLD = 98
@@ -49,16 +50,6 @@ SIMPLIFICATION_LINE_TOLERANCE = 2
 
 # Map features of Roves
 START_LOCATION = (62.781708, 22.894071)
-# MARKERS = {
-#     "Heatmac Oy: Metal processing and coating": (62.7869635, 22.8749094),
-#     "HANZA Mechanics Seinäjoki Oy: Metal machining": (62.7864375, 22.8780793),
-#     "DB Schenker: Transport services": (62.7780027, 22.9230551),
-#     "Würth: Small items": (62.7891151, 22.8584663),
-#     "Puuilo Seinäjoki: Small items": (62.7901162, 22.8830035),
-#     "ETRA Megacenter Seinäjoki: Packaging materials, etc.": (62.7882316, 22.8653514),
-#     "Hartman Rauta: Supplies": (62.7886955, 22.8692573),
-#     "Finnish Ore Oy: Metal sawing service": (62.7887869, 22.8708598),
-# }
 AREA_POLYGON = shapely.Polygon(
     (
         (22.877596, 62.77948),

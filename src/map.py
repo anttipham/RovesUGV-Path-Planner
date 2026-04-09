@@ -146,6 +146,21 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     )
 
 
+def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
+    # Display nodes in map for debugging
+    H = G.subgraph(
+        [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
+    )
+    gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
+    return folium.GeoJson(
+        gdf,
+        name=config.CROSSINGS_LAYER_NAME,
+        marker=folium.CircleMarker(
+            radius=2, color="black", fill=True, fill_opacity=0.7
+        ),
+    )
+
+
 def build_map(G: nx.MultiDiGraph) -> folium.Map:
     m = folium.Map(
         location=config.START_LOCATION,
@@ -159,6 +174,25 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     _add_tile_layers(m)
     make_buildings().add_to(m)
     make_roads(G).add_to(m)
+    make_crossings(G).add_to(m)
+
+    # Presentation markers
+    # markers = {
+    #     "Heatmac Oy: Metal processing and coating": (62.7869635, 22.8749094),
+    #     "HANZA Mechanics Seinäjoki Oy: Metal machining": (62.7864375, 22.8780793),
+    #     "DB Schenker: Transport services": (62.7780027, 22.9230551),
+    #     "Würth: Small items": (62.7891151, 22.8584663),
+    #     "Puuilo Seinäjoki: Small items": (62.7901162, 22.8830035),
+    #     "ETRA Megacenter Seinäjoki: Packaging materials, etc.": (62.7882316, 22.8653514),
+    #     "Hartman Rauta: Supplies": (62.7886955, 22.8692573),
+    #     "Finnish Ore Oy: Metal sawing service": (62.7887869, 22.8708598),
+    # }
+    # markers = folium.FeatureGroup("Yritykset")
+    # for name, coords in markers.items():
+    #     node = ox.nearest_nodes(G, coords[1], coords[0])
+    #     node_attr = G.nodes[node]
+    #     folium.Marker((node_attr["y"], node_attr["x"]), tooltip=name).add_to(markers)
+    # markers.add_to(m)
 
     # Add draw plugin to the map
     draw.add_draw_plugin(m)
