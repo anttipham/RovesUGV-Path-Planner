@@ -99,9 +99,7 @@ def make_buildings() -> folium.GeoJson:
 
 def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     color_map = plt.get_cmap("Reds")
-    max_log_centrality = math.log2(
-        max((val for _, _, val in G.edges(data="centrality") if val != 0))
-    )
+    max_log_centrality = math.log2(G.graph["max_centrality"])
 
     # Set minimum log centrality to be the log of the number of building accesses
     buildings_num = len(

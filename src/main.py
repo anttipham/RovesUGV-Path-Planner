@@ -74,9 +74,23 @@ def main():
         G: nx.MultiDiGraph = st.session_state["graph"]
 
         path.update_building_access(G, osm_gis.get_building_gdf())
-        ox.distance.add_edge_lengths(G)
-        path.add_all_building_path_pairs(G)
-        path.add_betweenness_centrality(G)
+        osm_gis.add_custom_attributes(G)
+
+        # path.add_all_building_path_pairs(G)
+        # path.add_betweenness_centrality(G)
+
+        # Recalculate paths and centrality until the paths converge, i.e. centrality
+        # doesn't change anymore
+        old_centrality = G.graph.get("max_centrality", -1)
+        i = 0
+        while old_centrality != G.graph.get("max_centrality", -2):
+            old_centrality = G.graph.get("max_centrality", -2)
+            path.add_all_building_path_pairs(G)
+            path.add_betweenness_centrality(G)
+            i += 1
+            print(
+                f"Centrality iteration {i}, max centrality: {G.graph['max_centrality']}"
+            )
 
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
@@ -86,16 +100,19 @@ def main():
     m = map.build_map(G)
 
     # Display nodes in map for debugging
-    # gdf = ox.graph_to_gdfs(G, nodes=True, edges=False)
-    # folium.GeoJson(
-    #     gdf,
-    #     style_function=lambda _: {
-    #         "fillColor": "blue",
-    #         "color": "black",
-    #         "weight": 3,
-    #         "fillOpacity": 0.5,
-    #     },
-    # ).add_to(m)
+    H = G.subgraph(
+        [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
+    )
+    gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
+    folium.GeoJson(
+        gdf,
+        style_function=lambda _: {
+            "fillColor": "blue",
+            "color": "black",
+            "weight": 3,
+            "fillOpacity": 0.5,
+        },
+    ).add_to(m)
 
     # Presentation markers
     # markers = folium.FeatureGroup("Yritykset")
@@ -115,7 +132,33 @@ def main():
         on_change=handle_map_click,
         layer_control=folium.LayerControl(),
     )
-    st.text("Map interaction data:")
+
+    # Debug prints
+
+    # Path costs
+    ids = path.get_chosen_building_nodes(G)
+    if len(ids) == 2:
+        source, target = ids[0], ids[1]
+        path_data = G.graph["all_building_path_pairs"].get((source, target))
+
+        total_cost = sum(path.calculate_cost(G, u, v) for u, v, _ in path_data)
+
+        st.header("Path details:")
+
+        st.write(f"max_centrality: `{G.graph['max_centrality']}`")
+
+        st.write(f"Total path cost: `{total_cost}`")
+
+        for u, v, key in path_data:
+            st.write(f"{u} -> {v}: `{path.calculate_cost(G, u, v)}`")
+            st.text(G.nodes[u])
+            st.text(G.edges[u, v, key])
+            st.text(G.nodes[v])
+
+    # Write path cost
+    cost = G.graph["all_building_path_pairs"]
+
+    st.header("Map interaction data:")
     st.write(st.session_state)
     # st_session_state = {
     #     "map": {

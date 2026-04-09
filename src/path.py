@@ -70,8 +70,8 @@ def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -
         # If the building node is already connected to the graph, skip it
         if G.edges(node1):
             continue
-        G.add_edge(node1, node2, ugv_access="yes", temporary_connection=True)
-        G.add_edge(node2, node1, ugv_access="yes", temporary_connection=True)
+        G.add_edge(node1, node2, ugv_access=True, temporary_connection=True)
+        G.add_edge(node2, node1, ugv_access=True, temporary_connection=True)
 
 
 def turn_aware_dijkstra(
@@ -272,68 +272,72 @@ def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
     return chosen_buildings
 
 
-def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
-    def cost(
-        prev_edge: tuple[int, int, int] | None,
-        curr_edge: tuple[int, int, int],
-        G: nx.MultiDiGraph,
-    ) -> float:
-        """
-        Function that returns the full traversal cost of taking curr_edge after prev_edge.
+def calculate_cost(
+    G: nx.MultiDiGraph,
+    prev_node: int,
+    curr_node: int,
+) -> float:
+    """
+    Calculate the cost of traversing an edge in the graph.
 
-        cost(prev_edge, curr_edge, G) -> non-negative float
+    Args:
+        G: The graph.
+        prev_node: Source node of the edge.
+        curr_node: Target node of the edge.
 
-        prev_edge is None for the first move from the source
-        curr_edge is (u, v, key)
-
-        Args:
-            u: Source node of the edge.
-            v: Target node of the edge.
-            data: Dictionary of edge attributes.
-
-        Returns:
-            The weight of the edge, or 1 if not specified.
-        """
-        curr_node = curr_edge[1]
-        prev_node = curr_edge[0]
-
-        # Add base cost for the edge
-        penalty = config.COST_SIDEWALK * G.edges[curr_edge]["length"]
+    Returns:
+        The weight of the edge, or 1 if not specified.
+    """
+    min_penalty = float("inf")
+    for key in G[prev_node][curr_node]:
+        curr_edge = (prev_node, curr_node, key)
 
         if "ugv_access" not in G.edges[curr_edge]:
             print(
-                f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_node]} and {G.nodes[prev_node]} is missing 'ugv_access' attribute"
+                f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_edge[0]]} "
+                f"and {G.nodes[curr_edge[1]]} is missing 'ugv_access' attribute"
             )
-        # Add penalty for roadways
-        if not G.edges[curr_edge]["ugv_access"]:
-            penalty *= config.COST_ROADWAY
 
-        # Skip turn costs for the first move from the source
-        if prev_edge is None:
-            return penalty
-
-        # Identify crossings where sidewalks intersect with roadways by checking
-        # prev_node neighboring edge attributes
-        prev_node_sidewalk_attributes = set(
-            ugv_access
-            for _, _, _, ugv_access in G.out_edges(
-                prev_node, keys=True, data="ugv_access", default=False
-            )
-        )
-        is_crossing = len(prev_node_sidewalk_attributes) > 1
+        # Add base cost for the edge
+        length = G.edges[curr_edge]["length"]
+        penalty = config.COST_SIDEWALK * length
 
         # Add penalty for crossings
-        if is_crossing:
-            match G.nodes[prev_node].get("crossing"):
+        if G.nodes[curr_node].get("ugv_crossing"):
+            match G.nodes[curr_node].get("crossing"):
                 case "traffic_signals":
-                    penalty += 0
-                case "zebra" | "marked":
-                    penalty += 5
+                    penalty += config.COST_TRAFFIC_SIGNALS
+                case "zebra" | "marked" | "uncontrolled":
+                    penalty += config.COST_ZEBRA_CROSSING
                 case _:
-                    penalty += 15
+                    penalty += config.COST_UNCONTROLLED_CROSSING
 
-        return penalty
+        # Extra penalty for leaving crossings on roadways
+        if not G.edges[curr_edge].get("ugv_access") and G.nodes[prev_node].get(
+            "ugv_crossing"
+        ):
+            penalty += config.COST_ROADWAY_CROSSING
 
+        # Penalty for roadways
+        if not G.edges[curr_edge].get("ugv_access"):
+            penalty += config.COST_ROADWAY * length
+
+        # Penalty for not following high centrality paths
+        if "centrality" in G.edges[curr_edge]:
+            penalty += (
+                config.COST_CENTRALITY_FACTOR
+                * length
+                * (1 - G.edges[curr_edge]["centrality"] / G.graph["max_centrality"])
+            )
+        else:
+            penalty += config.COST_CENTRALITY_FACTOR * length
+
+        min_penalty = min(min_penalty, penalty)
+
+    return penalty
+
+
+def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
     # Building node IDs
     chosen_buildings = [
         node
@@ -341,12 +345,28 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
         if is_building_access
     ]
 
-    all_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
+    all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
     for source in chosen_buildings:
-        distances, paths = turn_aware_dijkstra(G, source, chosen_buildings, cost=cost)
-        all_pairs.update({(source, target): path for target, path in paths.items()})
+        node_paths = nx.single_source_dijkstra_path(
+            G,
+            source,
+            weight=lambda u, v, _: calculate_cost(G, u, v),
+        )
+        edge_paths = {
+            (source, target): [
+                (u, v, next(iter(G[u][v])))
+                for u, v in zip(node_path[:-1], node_path[1:])
+            ]
+            for target, node_path in node_paths.items()
+            if target in chosen_buildings
+        }
+        # print(paths)
+        # distances, paths = turn_aware_dijkstra(
+        #     G, source, chosen_buildings, cost=calculate_cost
+        # )
+        all_building_path_pairs.update(edge_paths)
 
-    G.graph["all_building_path_pairs"] = all_pairs
+    G.graph["all_building_path_pairs"] = all_building_path_pairs
 
 
 def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
@@ -356,6 +376,8 @@ def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
     centralities = collections.Counter(
         edge for path in all_building_path_pairs.values() for edge in path
     )
+
+    G.graph["max_centrality"] = max(centralities.values())
 
     for edge in G.edges(keys=True):
         G.edges[edge]["centrality"] = centralities.get(edge, 0)
@@ -626,22 +648,18 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
             prev_node_id = split_nearest_edge(G, path[0][0], path[0][1])
             node_id = max(G.nodes) + 1
             G.add_node(node_id, x=path[0][0], y=path[0][1])
-            G.add_edge(prev_node_id, node_id, ugv_access="yes", virtual="yes")
-            G.add_edge(node_id, prev_node_id, ugv_access="yes", virtual="yes")
+            G.add_edge(prev_node_id, node_id, ugv_access=True, virtual="yes")
+            G.add_edge(node_id, prev_node_id, ugv_access=True, virtual="yes")
         prev_node_id = node_id
         node_id = prev_node_id + 1
 
         # Rest of the nodes in the path
         for x, y in path[1:]:
             G.add_node(node_id, x=x, y=y)
-            G.add_edge(prev_node_id, node_id, ugv_access="yes", virtual="yes")
-            G.add_edge(node_id, prev_node_id, ugv_access="yes", virtual="yes")
+            G.add_edge(prev_node_id, node_id, ugv_access=True, virtual="yes")
+            G.add_edge(node_id, prev_node_id, ugv_access=True, virtual="yes")
             prev_node_id = node_id
             node_id = prev_node_id + 1
         # Connect the end of the path to the connection node on the road graph
-        G.add_edge(
-            prev_node_id, connection_node_ids[i], ugv_access="yes", virtual="yes"
-        )
-        G.add_edge(
-            connection_node_ids[i], prev_node_id, ugv_access="yes", virtual="yes"
-        )
+        G.add_edge(prev_node_id, connection_node_ids[i], ugv_access=True, virtual="yes")
+        G.add_edge(connection_node_ids[i], prev_node_id, ugv_access=True, virtual="yes")
