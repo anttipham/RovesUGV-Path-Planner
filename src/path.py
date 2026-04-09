@@ -260,6 +260,143 @@ def turn_aware_dijkstra(
     return distances, paths
 
 
+def dijkstra_to_targets_edges(
+    G: nx.MultiDiGraph,
+    source: int,
+    targets: set[int],
+    cost_fn: Callable[[nx.MultiDiGraph, tuple[int, int, int]], float],
+) -> tuple[dict[int, float], dict[int, list[tuple[int, int, int]]]]:
+    """
+    Compute shortest paths from a source node to a set of target nodes
+    using Dijkstra's algorithm.
+
+    Key features:
+    - Works with MultiDiGraph (handles parallel edges via keys)
+    - Uses a custom edge cost function
+    - Stops early once all targets are reached (performance optimization)
+    - Returns edge-based paths instead of node-only paths
+
+    Args:
+        G: Directed multigraph
+        source: Starting node
+        targets: Set of target nodes we want shortest paths to
+        cost_fn: Function to compute edge cost
+
+    Returns:
+        distances:
+            dict[target] -> shortest distance from source
+
+        edge_paths:
+            dict[target] -> list of edges (u, v, k) forming the shortest path
+
+        Note:
+            Only reachable targets are included in the output.
+    """
+
+    # --- Input validation ---
+    if source not in G:
+        raise ValueError(f"Source node {source!r} is not in the graph.")
+
+    # If no targets, nothing to compute
+    if not targets:
+        return {}, {}
+
+    # Track which targets we still need to find
+    remaining_targets = set(targets)
+
+    # Distance from source to each node (initialized with source = 0)
+    distances: dict[int, float] = {source: 0.0}
+
+    # For each node, store the edge used to reach it
+    # This allows reconstructing the path later
+    predecessor_edge: dict[int, tuple[int, int, int] | None] = {source: None}
+
+    # Track finalized nodes (standard Dijkstra "visited" set)
+    visited: set[int] = set()
+
+    # Priority queue storing (distance, node)
+    heap: list[tuple[float, int]] = [(0.0, source)]
+
+    # --- Main Dijkstra loop ---
+    while heap and remaining_targets:
+        # Get node with smallest known distance
+        current_dist, u = heapq.heappop(heap)
+
+        # Skip if already processed (lazy deletion from heap)
+        if u in visited:
+            continue
+
+        # Mark node as finalized
+        visited.add(u)
+
+        # If this node is one of our targets, mark it as found
+        if u in remaining_targets:
+            remaining_targets.remove(u)
+
+        # Relax all outgoing edges from u
+        for _, v, k in G.out_edges(u, keys=True):
+            # Skip already finalized nodes
+            if v in visited:
+                continue
+
+            edge = (u, v, k)
+
+            # Compute edge cost using user-provided function
+            edge_cost = cost_fn(G, edge)
+
+            # Dijkstra requires non-negative weights
+            if edge_cost < 0:
+                raise ValueError(
+                    f"Dijkstra requires non-negative edge costs, got {edge_cost} for edge {edge}."
+                )
+
+            # Compute new candidate distance
+            new_dist = current_dist + edge_cost
+
+            # If we found a better path to v, update it
+            if new_dist < distances.get(v, math.inf):
+                distances[v] = new_dist
+
+                # Store the edge used to reach v
+                predecessor_edge[v] = edge
+
+                # Push updated distance to heap
+                heapq.heappush(heap, (new_dist, v))
+
+    # --- Reconstruct paths for reachable targets ---
+    reachable_distances: dict[int, float] = {}
+    reachable_edge_paths: dict[int, list[tuple[int, int, int]]] = {}
+
+    for target in targets:
+        # Skip unreachable targets
+        if target not in distances:
+            continue
+
+        path_edges: list[tuple[int, int, int]] = []
+        node = target
+
+        # Backtrack from target to source using predecessor edges
+        while node != source:
+            edge = predecessor_edge[node]
+
+            # Safety check (should not happen for reachable nodes)
+            if edge is None:
+                break
+
+            path_edges.append(edge)
+
+            # Move to previous node (u of edge u->v)
+            node = edge[0]
+
+        # Reverse to get source -> target order
+        path_edges.reverse()
+
+        reachable_distances[target] = distances[target]
+        reachable_edge_paths[target] = path_edges
+
+    return reachable_distances, reachable_edge_paths
+
+
 def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
     # Find all chosen buildings
     all_chosen_buildings = [
@@ -272,98 +409,89 @@ def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
     return chosen_buildings
 
 
-def calculate_cost(
-    G: nx.MultiDiGraph,
-    prev_node: int,
-    curr_node: int,
-) -> float:
+def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float:
     """
     Calculate the cost of traversing an edge in the graph.
 
     Args:
         G: The graph.
-        prev_node: Source node of the edge.
-        curr_node: Target node of the edge.
+        edge: A tuple (u, v, key) representing the edge to calculate the cost for.
 
     Returns:
-        The weight of the edge, or 1 if not specified.
+        The weight of the edge.
     """
-    min_penalty = float("inf")
-    for key in G[prev_node][curr_node]:
-        curr_edge = (prev_node, curr_node, key)
+    prev_node, curr_node, key = curr_edge
 
-        if "ugv_access" not in G.edges[curr_edge]:
-            print(
-                f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_edge[0]]} "
-                f"and {G.nodes[curr_edge[1]]} is missing 'ugv_access' attribute"
-            )
+    if "ugv_access" not in G.edges[curr_edge]:
+        print(
+            f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_edge[0]]} "
+            f"and {G.nodes[curr_edge[1]]} is missing 'ugv_access' attribute"
+        )
 
-        # Add base cost for the edge
-        length = G.edges[curr_edge]["length"]
-        penalty = config.COST_SIDEWALK * length
+    # Add base cost for the edge
+    length = G.edges[curr_edge]["length"]
+    penalty = config.COST_SIDEWALK * length
 
-        # Add penalty for crossings
-        if G.nodes[curr_node].get("ugv_crossing"):
-            match G.nodes[curr_node].get("crossing"):
-                case "traffic_signals":
-                    penalty += config.COST_TRAFFIC_SIGNALS
-                case "zebra" | "marked" | "uncontrolled":
-                    penalty += config.COST_ZEBRA_CROSSING
-                case _:
-                    penalty += config.COST_UNCONTROLLED_CROSSING
+    # Add penalty for crossings
+    if G.nodes[curr_node].get("ugv_crossing"):
+        match G.nodes[curr_node].get("crossing"):
+            case "traffic_signals":
+                penalty += config.COST_TRAFFIC_SIGNALS
+            case "zebra" | "marked" | "uncontrolled":
+                penalty += config.COST_ZEBRA_CROSSING
+            case _:
+                penalty += config.COST_UNCONTROLLED_CROSSING
 
-        # Extra penalty for leaving crossings on roadways
-        if not G.edges[curr_edge].get("ugv_access") and G.nodes[prev_node].get(
-            "ugv_crossing"
-        ):
-            penalty += config.COST_ROADWAY_CROSSING
+    # Extra penalty for leaving crossings on roadways
+    if not G.edges[curr_edge].get("ugv_access") and G.nodes[prev_node].get(
+        "ugv_crossing"
+    ):
+        penalty += config.COST_ROADWAY_CROSSING
 
-        # Penalty for roadways
-        if not G.edges[curr_edge].get("ugv_access"):
-            penalty += config.COST_ROADWAY * length
+    # Penalty for roadways
+    if not G.edges[curr_edge].get("ugv_access"):
+        penalty += config.COST_ROADWAY * length
 
-        # Penalty for not following high centrality paths
-        if "centrality" in G.edges[curr_edge]:
-            penalty += (
-                config.COST_CENTRALITY_FACTOR
-                * length
-                * (1 - G.edges[curr_edge]["centrality"] / G.graph["max_centrality"])
-            )
-        else:
-            penalty += config.COST_CENTRALITY_FACTOR * length
-
-        min_penalty = min(min_penalty, penalty)
+    # Penalty for not following high centrality paths
+    if "centrality" in G.edges[curr_edge]:
+        penalty += (
+            config.COST_CENTRALITY_FACTOR
+            * length
+            * (1 - G.edges[curr_edge]["centrality"] / G.graph["max_centrality"])
+        )
+    else:
+        penalty += config.COST_CENTRALITY_FACTOR * length
 
     return penalty
 
 
 def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
     # Building node IDs
-    chosen_buildings = [
+    chosen_buildings = set(
         node
         for node, is_building_access in G.nodes(data="building_access")
         if is_building_access
-    ]
+    )
 
     all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
     for source in chosen_buildings:
-        node_paths = nx.single_source_dijkstra_path(
-            G,
-            source,
-            weight=lambda u, v, _: calculate_cost(G, u, v),
-        )
-        edge_paths = {
-            (source, target): [
-                (u, v, next(iter(G[u][v])))
-                for u, v in zip(node_path[:-1], node_path[1:])
-            ]
-            for target, node_path in node_paths.items()
-            if target in chosen_buildings
-        }
-        # print(paths)
-        # distances, paths = turn_aware_dijkstra(
-        #     G, source, chosen_buildings, cost=calculate_cost
+        # node_paths = nx.single_source_dijkstra_path(
+        #     G,
+        #     source,
+        #     weight=lambda u, v, _: calculate_cost(G, u, v),
         # )
+        # edge_paths = {
+        #     (source, target): [
+        #         (u, v, next(iter(G[u][v])))
+        #         for u, v in zip(node_path[:-1], node_path[1:])
+        #     ]
+        #     for target, node_path in node_paths.items()
+        #     if target in chosen_buildings
+        # }
+        distances, paths = dijkstra_to_targets_edges(
+            G, source, chosen_buildings, calculate_cost
+        )
+        edge_paths = {(source, target): path for target, path in paths.items()}
         all_building_path_pairs.update(edge_paths)
 
     G.graph["all_building_path_pairs"] = all_building_path_pairs
