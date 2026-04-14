@@ -474,9 +474,9 @@ def goal_mask_from_osmnx_graph(
         crs=config.METRIC_EPSG,
     )
 
-    # Exclude temporary connections
-    if "temporary_connection" in edges_gdf.columns:
-        mask = edges_gdf["temporary_connection"].fillna(False).astype(bool)
+    # Exclude closest node connections
+    if "ugv_closest_node_connection" in edges_gdf.columns:
+        mask = edges_gdf["ugv_closest_node_connection"].fillna(False).astype(bool)
         edges_gdf = edges_gdf[~mask]
 
     # Clip graph edges to bounding box

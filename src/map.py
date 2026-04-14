@@ -105,8 +105,10 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     buildings_num = len(
         [
             node
-            for node, is_building_access in G.nodes(data="building_access")
-            if is_building_access
+            for node, is_ugv_closest_node_connection in G.nodes(
+                data="ugv_closest_node_connection"
+            )
+            if is_ugv_closest_node_connection
         ]
     )
     # The same building doesn't need paths to itself.

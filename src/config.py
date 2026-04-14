@@ -6,7 +6,7 @@ import osmnx as ox
 import shapely
 
 # Streamlit constants
-APP_TITLE = "RovesUGV"
+APP_TITLE = "RovesUGV Path Planner"
 
 # Tile names
 OPEN_STREET_MAP_LAYER_NAME = "OpenStreetMap"
