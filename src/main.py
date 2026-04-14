@@ -59,9 +59,17 @@ def handle_map_click():
 
 
 def main():
+    # Quick and dirty way to set the cost centrality factor via query params, e.g.
+    # http://localhost:8501/?cb=0.5
+    cost_centrality_factor = st.query_params.get("cb", config.COST_CENTRALITY_FACTOR)
+    config.COST_CENTRALITY_FACTOR = float(cost_centrality_factor)
+
     # Initialize Streamlit app
-    st.set_page_config(page_title=config.APP_TITLE, layout="wide")
-    st.title(config.APP_TITLE)
+    st.set_page_config(
+        page_title=f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}",
+        layout="wide",
+    )
+    st.title(f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}")
 
     # Create graph
     if "graph" not in st.session_state:
@@ -90,7 +98,8 @@ def main():
                 path.add_betweenness_centrality(G)
                 i += 1
                 print(
-                    f"Centrality iteration {i}, max centrality: {G.graph['max_centrality']}"
+                    f"Centrality iteration {i}, "
+                    f"max centrality: {G.graph['max_centrality']}"
                 )
 
         st.session_state["graph"] = G
