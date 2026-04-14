@@ -23,7 +23,7 @@ A Streamlit + OSMnx application for planning UGV routes in Seinäjoki.
 
 ## Prerequisites
 
-- Python 3.12 (Developed with Python 3.12.12) (Might work with other versions as well)
+- Python 3.12 (Might also work with other versions as well)
 - MapProxy
 - Internet access for maps and OSM (OpenStreetMap) downloads
 
