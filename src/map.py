@@ -3,14 +3,17 @@ Everything related to drawing to the map and folium library is here.
 """
 
 import math
-import matplotlib.pyplot as plt
+
 import folium
+import geopandas as gpd
+import matplotlib.pyplot as plt
 import networkx as nx
 import osmnx as ox
+from folium.plugins import Draw
 
 import config
 import draw
-import osm_gis
+import graph
 
 LEAFLET_STYLING = """
     <style>
@@ -19,6 +22,43 @@ LEAFLET_STYLING = """
     }
     </style>
 """
+
+
+def create_editable_road_layer() -> folium.FeatureGroup:
+    editable_road_layer = folium.FeatureGroup(
+        name=config.DRAW_LAYER_NAME,
+    )
+    edges = gpd.GeoDataFrame()
+
+    # Add edges and their metadata to the editable road layer
+    for _, edge in edges.iterrows():
+        # Make edge to geojson polyline and add to the layer
+        coords = [(y, x) for x, y in edge["geometry"].coords]
+        folium.PolyLine(
+            coords,
+            color="blue",
+        ).add_to(editable_road_layer)
+
+    return editable_road_layer
+
+
+def add_draw_plugin(m: folium.Map) -> None:
+    # Add editable road layer to the map
+    road_layer = create_editable_road_layer().add_to(m)
+    Draw(
+        export=False,
+        filename="roves_ugv_map_data.geojson",
+        feature_group=road_layer,
+        draw_options={
+            "polyline": False,
+            "polygon": False,
+            "rectangle": False,
+            "circle": False,
+            "marker": True,
+            "circlemarker": False,
+        },
+        edit_options={"edit": False, "remove": False},
+    ).add_to(m)
 
 
 def _add_tile_layers(m: folium.Map) -> None:
@@ -86,7 +126,7 @@ def _add_tile_layers(m: folium.Map) -> None:
 
 def make_buildings() -> folium.GeoJson:
     return folium.GeoJson(
-        osm_gis.get_building_gdf(),
+        graph.get_building_gdf(),
         name=config.BUILDING_LAYER_NAME,
         style_function=lambda _: {
             # "fillColor": "black",
@@ -197,7 +237,7 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     # markers.add_to(m)
 
     # Add draw plugin to the map
-    draw.add_draw_plugin(m)
+    add_draw_plugin(m)
 
     # Custom CSS to style the edit vertices as circles
     m.get_root().header.add_child(folium.Element(LEAFLET_STYLING))

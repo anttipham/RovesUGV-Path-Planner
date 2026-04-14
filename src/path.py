@@ -19,7 +19,7 @@ import shapely
 from shapely.geometry import LineString, Point
 
 import config
-import osm_gis
+import graph
 import path_image
 
 
@@ -539,7 +539,7 @@ def show_path(
     ids = get_chosen_building_nodes(G)
 
     # Show chosen buildings
-    buildings = osm_gis.get_building_gdf()
+    buildings = graph.get_building_gdf()
     chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
     folium.GeoJson(
         chosen_buildings,

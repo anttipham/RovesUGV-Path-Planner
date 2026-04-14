@@ -26,11 +26,10 @@ import folium
 import networkx as nx
 import streamlit as st
 from streamlit_folium import st_folium
-import osmnx as ox
 
 import config
 import map
-import osm_gis
+import graph
 import path
 
 
@@ -73,7 +72,7 @@ def main():
 
     # Create graph
     if "graph" not in st.session_state:
-        G = osm_gis.create_road_graph()
+        G = graph.create_road_graph()
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
 
@@ -81,8 +80,8 @@ def main():
     if st.session_state["update_graph"]:
         G: nx.MultiDiGraph = st.session_state["graph"]
 
-        path.update_building_access(G, osm_gis.get_building_gdf())
-        osm_gis.add_custom_attributes(G)
+        path.update_building_access(G, graph.get_building_gdf())
+        graph.add_custom_attributes(G)
 
         if config.COST_CENTRALITY_FACTOR == 0:
             path.add_all_building_path_pairs(G)
