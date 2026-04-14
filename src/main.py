@@ -1,23 +1,26 @@
 """
-Handles streamlit stuff.
+Streamlit application entrypoint for RovesUGV Path Planner.
 
-st.session state structure:
-{
-    "map": {
-        "last_active_drawing": {
-            "bbox": [...],
-            "geometry": {
-                "type": "...",
-                "coordinates": [...]
-            },
-            "id": "..."
-            "properties": {...},
-            "type": "Feature"
-        }
-    },
-    "graph": <networkx graph object>,
-    "update_graph": True/False
-}
+The main module orchestrates the Streamlit UI lifecycle, manages the road graph,
+handles map interactions, and displays routing diagnostics.
+
+Session State Keys
+------------------
+map : dict
+    Payload from streamlit-folium containing:
+
+    - last_active_drawing: Most recent map interaction (when feature is clicked).
+        - bbox: The bounding box of the drawn object.
+        - geometry: The GeoJSON geometry of the drawn object.
+        - id: The OSM feature ID if the drawn object corresponds to an OSM feature
+        - properties: Additional properties of the drawn object, such as OSM tags for buildings.
+        - type: The type of the drawn object, e.g. "Feature".
+
+graph : nx.MultiDiGraph
+    Current routing graph with all computed attributes and paths.
+
+update_graph : bool
+    Flag indicating whether graph attributes and building path pairs need recomputation.
 """
 
 import time
@@ -35,7 +38,16 @@ import path
 
 def handle_map_click():
     """
-    Handle map click events by checking the last active drawing in the session state.
+    Process the latest map interaction event from Streamlit session state.
+
+    Handles two types of interactions:
+
+    1. **Building polygon click** (Polygon geometry with id):
+       - Marks building as selected by updating `chosen_time` node attribute.
+
+    2. **Point marker placement** (Point geometry):
+       - Triggers computation of virtual premise paths from raster imagery.
+       - Sets `update_graph` flag to refresh centrality and path pairs.
     """
     clicked_object = st.session_state["map"]["last_active_drawing"]
 
@@ -58,25 +70,34 @@ def handle_map_click():
 
 
 def main():
-    # Quick and dirty way to set the cost centrality factor via query params, e.g.
-    # http://localhost:8501/?cb=0.5
+    """
+    Initialize Streamlit UI, maintain graph lifecycle, and render map with diagnostics.
+
+    Workflow:
+    1. Parse centrality factor from query parameters (or use default).
+    2. Initialize/fetch graph from session state.
+    3. Recompute building paths and centrality when needed.
+    4. Render interactive Folium map and capture interactions.
+    5. Display selected path cost breakdown if two buildings are chosen.
+    """
+    # Allow centrality factor override via query parameter, e.g. ?cb=0.5
     cost_centrality_factor = st.query_params.get("cb", config.COST_CENTRALITY_FACTOR)
     config.COST_CENTRALITY_FACTOR = float(cost_centrality_factor)
 
-    # Initialize Streamlit app
+    # Initialize Streamlit page
     st.set_page_config(
         page_title=f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}",
         layout="wide",
     )
     st.title(f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}")
 
-    # Create graph
+    # Build graph once per session
     if "graph" not in st.session_state:
         G = graph.create_road_graph()
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
 
-    # Update graph
+    # Refresh derived graph data when requested
     if st.session_state["update_graph"]:
         G: nx.MultiDiGraph = st.session_state["graph"]
 
@@ -87,18 +108,18 @@ def main():
             path.add_all_building_path_pairs(G)
             path.add_betweenness_centrality(G)
         else:
-            # Recalculate paths and centrality until the paths converge, i.e. centrality
-            # doesn't change anymore
-            old_centrality = G.graph.get("max_centrality", -1)
+            # Recalculate paths and centrality until convergence
+            # (max centrality no longer changes between iterations)
+            old_centrality = G.graph.get("ugv_max_centrality", -1)
             i = 0
-            while old_centrality != G.graph.get("max_centrality", -2):
-                old_centrality = G.graph.get("max_centrality", -2)
+            while old_centrality != G.graph.get("ugv_max_centrality", -2):
+                old_centrality = G.graph.get("ugv_max_centrality", -2)
                 path.add_all_building_path_pairs(G)
                 path.add_betweenness_centrality(G)
                 i += 1
                 print(
                     f"Centrality iteration {i}, "
-                    f"max centrality: {G.graph['max_centrality']}"
+                    f"max centrality: {G.graph['ugv_max_centrality']}"
                 )
 
         st.session_state["graph"] = G
@@ -119,9 +140,7 @@ def main():
         layer_control=folium.LayerControl(),
     )
 
-    # Debug prints
-
-    # Path costs
+    # Debug output: selected route and per-edge costs
     ids = path.get_chosen_building_nodes(G)
     if len(ids) == 2:
         source, target = ids[0], ids[1]
@@ -131,7 +150,7 @@ def main():
 
         st.header("Path details:")
 
-        st.write(f"max_centrality: `{G.graph['max_centrality']}`")
+        st.write(f"max_centrality: `{G.graph['ugv_max_centrality']}`")
 
         st.write(f"Total path cost: `{total_cost}`")
 

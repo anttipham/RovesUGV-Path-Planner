@@ -1,5 +1,8 @@
 """
-Configuration constants for the mapping application.
+Configuration constants for the RovesUGV Path Planner application.
+
+This module centralizes all routing parameters, UI labels, coordinate system definitions,
+and 2D raster pathfinding settings used throughout the application.
 """
 
 import osmnx as ox
@@ -26,30 +29,34 @@ for tag in TAGS_WAY:
     if tag not in ox.settings.useful_tags_way:
         ox.settings.useful_tags_way += [tag]
 SIDEWALK_FOOT_TAG_VALUES = ["yes", "designated"]
-MAP_EPSG = "EPSG:4326"
-METRIC_EPSG = "EPSG:3857"
+MAP_EPSG = "EPSG:4326"  # WGS84 geographic CRS
+METRIC_EPSG = "EPSG:3857"  # Web Mercator projected CRS (meters)
 
-# Cost constants
-COST_SIDEWALK = 0.008
-COST_ROADWAY = 5 * COST_SIDEWALK
-COST_TRAFFIC_SIGNALS = 0
-COST_ZEBRA_CROSSING = 2
-COST_UNCONTROLLED_CROSSING = 5
-COST_ROADWAY_CROSSING = 30
-COST_CENTRALITY_FACTOR = 0
+# Cost constants for routing
+COST_SIDEWALK = 0.008  # Cost per meter on sidewalk
+COST_ROADWAY = 5 * COST_SIDEWALK  # Cost per meter on roadway (5x sidewalk)
+COST_TRAFFIC_SIGNALS = 0  # Additional cost at traffic-signal crossings
+COST_ZEBRA_CROSSING = 2  # Additional cost at zebra/marked crossings
+COST_UNCONTROLLED_CROSSING = 5  # Additional cost at uncontrolled crossings
+COST_ROADWAY_CROSSING = 30  # Penalty for exiting a crossing onto a roadway
+COST_CENTRALITY_FACTOR = 0  # Multiplier for edge centrality penalty (0 = disabled)
 
-# 2D pathfinding constants
-TRAVERSABLE_THRESHOLD = 98
-GOAL_BLOCK_DIAMETER = 75
-MINIMUM_OBSTACLE_DISTANCE = 2
-GRADUAL_OBSTACLE_COST_RADIUS = 5
-BBOX_SIZE = 1000
-BBOX_IMAGE_SIZE = 512
-SIMPLIFICATION_COMBINATION_TOLERANCE = 3
-SIMPLIFICATION_LINE_TOLERANCE = 2
+# 2D raster pathfinding constants
+TRAVERSABLE_THRESHOLD = (
+    98  # Grayscale threshold to distinguish free space from obstacles
+)
+GOAL_BLOCK_DIAMETER = 75  # Diameter (pixels) of suppression circle around reached goals
+MINIMUM_OBSTACLE_DISTANCE = 2  # Dilation radius (pixels) for obstacle safety margin
+GRADUAL_OBSTACLE_COST_RADIUS = (
+    5  # Max distance (pixels) for soft obstacle penalty rings
+)
+BBOX_SIZE = 1000  # Size (meters) of bounding box around clicked point
+BBOX_IMAGE_SIZE = 512  # Resolution (pixels) of downloaded raster tiles
+SIMPLIFICATION_COMBINATION_TOLERANCE = 3  # Distance (pixels) for path merging
+SIMPLIFICATION_LINE_TOLERANCE = 2  # Tolerance for LineString.simplify()
 
-# Map features of Roves
-START_LOCATION = (62.781708, 22.894071)
+# Map features of Roves area
+START_LOCATION = (62.781708, 22.894071)  # in EPSG:4326
 AREA_POLYGON = shapely.Polygon(
     (
         (22.877596, 62.77948),

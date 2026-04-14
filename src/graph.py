@@ -1,5 +1,5 @@
 """
-Everything related to fetching data for the graph is here.
+Graph data access and graph preprocessing utilities.
 """
 
 import geopandas as gpd
@@ -10,7 +10,14 @@ import config
 
 
 def get_building_gdf() -> gpd.GeoDataFrame:
-    # Fetch building geometries from OSMnx
+    """
+    Fetch building polygons from OpenStreetMap inside the configured area.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Building features indexed by OSM feature id.
+    """
     gdf = ox.features_from_polygon(
         config.AREA_POLYGON,
         {"building": True},
@@ -19,10 +26,17 @@ def get_building_gdf() -> gpd.GeoDataFrame:
 
 
 def create_road_graph() -> nx.MultiDiGraph:
+    """
+    Create an unsimplified road graph for the configured area polygon.
+
+    Returns
+    -------
+    nx.MultiDiGraph
+        Directed multigraph containing OSM road/path network edges and nodes.
+    """
     G = ox.graph.graph_from_polygon(
         config.AREA_POLYGON,
         network_type="all",
-        # retain_all=True,
         truncate_by_edge=True,
         simplify=False,
     )
@@ -30,19 +44,32 @@ def create_road_graph() -> nx.MultiDiGraph:
 
 
 def add_custom_attributes(G: nx.MultiDiGraph) -> None:
+    """
+    Add application-specific attributes to graph edges and nodes.
+
+    Added attributes
+    ----------------
+    Edge:
+        ugv_sidewalk : bool
+            True if edge is considered sidewalk-traversable.
+    Node:
+        ugv_crossing : bool
+            True if node is tagged as a crossing.
+    """
+    # Ensure edge lengths exist (meters)
     ox.distance.add_edge_lengths(G)
 
-    # Add ugv_sidewalk attribute to edges where foot access is allowed
+    # Mark sidewalk-eligible edges for UGV routing
     for u, v, key, data in G.edges(keys=True, data=True):
         if (
-            data.get("ugv_sidewalk") == True
+            data.get("ugv_sidewalk") is True
             or data.get("foot") in config.SIDEWALK_FOOT_TAG_VALUES
         ):
             data["ugv_sidewalk"] = True
         else:
             data["ugv_sidewalk"] = False
 
-    # Find all crossings and add a custom attribute to the nodes
+    # Mark crossing nodes used for crossing penalties
     for node in G.nodes():
         if G.nodes[node].get("highway") == "crossing":
             G.nodes[node]["ugv_crossing"] = True

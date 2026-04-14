@@ -1,5 +1,8 @@
 """
-Everything related to drawing to the map and folium library is here.
+Map visualization and Folium layer construction.
+
+Provides utilities to build interactive Folium maps with styled road/building layers,
+WMS tile integration, and user-interaction handlers via the Draw plugin.
 """
 
 import math
@@ -12,7 +15,6 @@ import osmnx as ox
 from folium.plugins import Draw
 
 import config
-import draw
 import graph
 
 LEAFLET_STYLING = """
@@ -25,6 +27,14 @@ LEAFLET_STYLING = """
 
 
 def create_editable_road_layer() -> folium.FeatureGroup:
+    """
+    Create a feature group for user-drawn map interaction elements.
+
+    Returns
+    -------
+    folium.FeatureGroup
+        Empty editable layer attached to the Draw plugin.
+    """
     editable_road_layer = folium.FeatureGroup(
         name=config.DRAW_LAYER_NAME,
     )
@@ -43,6 +53,14 @@ def create_editable_road_layer() -> folium.FeatureGroup:
 
 
 def add_draw_plugin(m: folium.Map) -> None:
+    """
+    Attach the Folium Draw plugin to the map for point-marker input.
+
+    Parameters
+    ----------
+    m : folium.Map
+        Map object to add the Draw plugin to.
+    """
     # Add editable road layer to the map
     road_layer = create_editable_road_layer().add_to(m)
     Draw(
@@ -62,6 +80,16 @@ def add_draw_plugin(m: folium.Map) -> None:
 
 
 def _add_tile_layers(m: folium.Map) -> None:
+    """
+    Add base and overlay WMS tile layers to the map.
+
+    Includes OpenStreetMap, satellite imagery, and topographic layers from MapProxy.
+
+    Parameters
+    ----------
+    m : folium.Map
+        Map object to add tile layers to.
+    """
     # OpenStreetMap
     folium.WmsTileLayer(
         url="http://localhost:8080/service",
@@ -125,11 +153,18 @@ def _add_tile_layers(m: folium.Map) -> None:
 
 
 def make_buildings() -> folium.GeoJson:
+    """
+    Build a GeoJson layer displaying building polygons.
+
+    Returns
+    -------
+    folium.GeoJson
+        GeoJson layer with building features.
+    """
     return folium.GeoJson(
         graph.get_building_gdf(),
         name=config.BUILDING_LAYER_NAME,
         style_function=lambda _: {
-            # "fillColor": "black",
             "color": "black",
             "weight": 1,
             "fillOpacity": 0.2,
@@ -138,6 +173,19 @@ def make_buildings() -> folium.GeoJson:
 
 
 def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
+    """
+    Build a styled road layer where line color and thickness reflect edge centrality.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with centrality attributes.
+
+    Returns
+    -------
+    folium.GeoJson
+        Styled GeoJson road layer.
+    """
     color_map = plt.get_cmap("Reds")
     max_log_centrality = math.log2(G.graph["max_centrality"])
 
@@ -189,6 +237,19 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
 
 
 def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
+    """
+    Build a point layer for crossing nodes (debug visualization).
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph containing crossing nodes.
+
+    Returns
+    -------
+    folium.GeoJson
+        GeoJson layer with crossing points.
+    """
     # Display nodes in map for debugging
     H = G.subgraph(
         [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
@@ -204,6 +265,21 @@ def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
 
 
 def build_map(G: nx.MultiDiGraph) -> folium.Map:
+    """
+    Assemble and return the full interactive Folium map.
+
+    Combines tile layers, building/road overlays, crossing markers, and the Draw plugin.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph to visualize.
+
+    Returns
+    -------
+    folium.Map
+        Complete interactive map object.
+    """
     m = folium.Map(
         location=config.START_LOCATION,
         tiles=None,
@@ -217,24 +293,6 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     make_buildings().add_to(m)
     make_roads(G).add_to(m)
     make_crossings(G).add_to(m)
-
-    # Presentation markers
-    # markers = {
-    #     "Heatmac Oy: Metal processing and coating": (62.7869635, 22.8749094),
-    #     "HANZA Mechanics Seinäjoki Oy: Metal machining": (62.7864375, 22.8780793),
-    #     "DB Schenker: Transport services": (62.7780027, 22.9230551),
-    #     "Würth: Small items": (62.7891151, 22.8584663),
-    #     "Puuilo Seinäjoki: Small items": (62.7901162, 22.8830035),
-    #     "ETRA Megacenter Seinäjoki: Packaging materials, etc.": (62.7882316, 22.8653514),
-    #     "Hartman Rauta: Supplies": (62.7886955, 22.8692573),
-    #     "Finnish Ore Oy: Metal sawing service": (62.7887869, 22.8708598),
-    # }
-    # markers = folium.FeatureGroup("Yritykset")
-    # for name, coords in markers.items():
-    #     node = ox.nearest_nodes(G, coords[1], coords[0])
-    #     node_attr = G.nodes[node]
-    #     folium.Marker((node_attr["y"], node_attr["x"]), tooltip=name).add_to(markers)
-    # markers.add_to(m)
 
     # Add draw plugin to the map
     add_draw_plugin(m)

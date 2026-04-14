@@ -1,5 +1,9 @@
 """
-Warning: This file is largely vibe coded, but the code has been checked.
+2D raster-based pathfinding utilities used for premise routing.
+
+This module converts map imagery into a traversability mask, generates goal masks
+from the road graph, and computes multiple shortest paths from a central start
+location to reachable road-connection points in image space.
 """
 
 from __future__ import annotations

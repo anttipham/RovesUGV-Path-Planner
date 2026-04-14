@@ -1,5 +1,8 @@
 """
-Everything related to algorithms and paths are here
+Graph routing algorithms and virtual premise path insertion.
+
+Implements turn-aware shortest-path algorithms, building-access node management,
+edge centrality computation, and conversion of 2D raster paths to graph edges.
 """
 
 import collections
@@ -24,6 +27,20 @@ import path_image
 
 
 def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -> None:
+    """
+    Rebuild temporary building-access connectors in the graph.
+
+    For each building, a building-access node is created (or reused), then connected
+    bidirectionally to the nearest graph node via `ugv_closest_node_connection` edges.
+    Existing temporary access edges/nodes are removed before regeneration.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Road graph to modify.
+    building_gdf : geopandas.GeoDataFrame
+        GeoDataFrame of building polygons.
+    """
     # Remove existing closest node connections to the building access nodes
     edges_to_remove = [
         (u, v, k)
@@ -74,190 +91,142 @@ def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -
         G.add_edge(node2, node1, ugv_sidewalk=True, ugv_closest_node_connection=True)
 
 
-def turn_aware_dijkstra(
-    G: nx.MultiDiGraph,
-    source: int,
-    targets: Iterable[int],
-    *,
-    cost: Callable[
-        [tuple[int, int, int] | None, tuple[int, int, int], nx.MultiDiGraph],
-        float,
-    ],
-) -> tuple[dict[int, float], dict[int, list[tuple[int, int, int]]]]:
-    """
-    Compute shortest paths from one source to many targets in a MultiDiGraph,
-    where the traversal cost of an edge may depend on the previously used edge.
+# def turn_aware_dijkstra(
+#     G: nx.MultiDiGraph,
+#     source: int,
+#     targets: Iterable[int],
+#     *,
+#     cost: Callable[
+#         [tuple[int, int, int] | None, tuple[int, int, int], nx.MultiDiGraph],
+#         float,
+#     ],
+# ) -> tuple[dict[int, float], dict[int, list[tuple[int, int, int]]]]:
+#     """
+#     Compute shortest paths from one source to many targets with turn costs.
 
-    Each search state is:
-        (current_node, incoming_edge)
+#     This algorithm treats the traversal cost of an edge as potentially dependent
+#     on the previously used edge (turn cost). The search state includes both the
+#     current node and the incoming edge.
 
-    This is necessary for turn-aware routing, because arriving at the same node
-    through different incoming edges can lead to different onward costs.
+#     Parameters
+#     ----------
+#     G : nx.MultiDiGraph
+#         Directed multigraph.
+#     source : int
+#         Source node id.
+#     targets : Iterable[int]
+#         Target node ids.
+#     cost : Callable
+#         Function computing the cost of traversing `curr_edge` after `prev_edge`.
 
-    Parameters
-    ----------
-    G
-        Directed multigraph.
-    source
-        Source node id.
-    targets
-        Target node ids.
-    cost
-        Function that returns the full traversal cost of taking curr_edge after
-        prev_edge.
+#         Signature: `cost(prev_edge, curr_edge, G) -> float`
 
-            cost(prev_edge, curr_edge, G) -> non-negative float
+#         - `prev_edge` is None for the first move from source
+#         - `curr_edge` is tuple (u, v, key)
+#         - Cost must be non-negative
 
-        - prev_edge is None for the first move from the source
-        - curr_edge is (u, v, key)
+#     Returns
+#     -------
+#     distances : dict[int, float]
+#         Shortest distance to each target. Unreachable: value = infinity.
+#     paths : dict[int, list[tuple[int, int, int]]]
+#         Edge-based shortest path to each target. Unreachable: value = [].
+#     """
 
-    Returns
-    -------
-    distances, paths
-        distances[target] = shortest distance from source to target
-        paths[target] = shortest edge path as a list of (u, v, key)
+#     # Validate
+#     if not isinstance(G, nx.MultiDiGraph):
+#         raise TypeError("G must be a nx.MultiDiGraph")
+#     if source not in G:
+#         raise nx.NodeNotFound(f"Source node {source!r} not in graph")
 
-        Unreachable targets get:
-            distance = math.inf
-            path = []
-    """
+#     targets = set(targets)
+#     missing = [t for t in targets if t not in G]
+#     if missing:
+#         raise nx.NodeNotFound(f"Target nodes not in graph: {missing!r}")
 
-    # Validate
-    if not isinstance(G, nx.MultiDiGraph):
-        raise TypeError("G must be a nx.MultiDiGraph")
-    if source not in G:
-        raise nx.NodeNotFound(f"Source node {source!r} not in graph")
+#     # Initial state: current node = source, previous edge = None
+#     start_state: tuple[int, tuple[int, int, int] | None] = (source, None)
 
-    targets = set(targets)
-    missing = [t for t in targets if t not in G]
-    if missing:
-        raise nx.NodeNotFound(f"Target nodes not in graph: {missing!r}")
+#     dist: dict[tuple[int, tuple[int, int, int] | None], float] = {start_state: 0.0}
+#     parent: dict[
+#         tuple[int, tuple[int, int, int] | None],
+#         tuple[int, tuple[int, int, int] | None] | None,
+#     ] = {start_state: None}
+#     used_edge: dict[
+#         tuple[int, tuple[int, int, int] | None],
+#         tuple[int, int, int] | None,
+#     ] = {start_state: None}
 
-    # Initial state:
-    # - current node = source
-    # - previous edge = None, because no edge has been taken yet
-    start_state: tuple[int, tuple[int, int, int] | None] = (source, None)
+#     heap: list[tuple[float, int, tuple[int, tuple[int, int, int] | None]]] = []
+#     counter = 0
+#     heapq.heappush(heap, (0.0, counter, start_state))
 
-    # Shortest known distance to each expanded state.
-    # Key = (node, incoming_edge)
-    dist: dict[tuple[int, tuple[int, int, int] | None], float] = {start_state: 0.0}
+#     best_target_state: dict[int, tuple[int, tuple[int, int, int] | None]] = {}
+#     best_target_dist: dict[int, float] = {}
+#     remaining = set(targets)
 
-    # Parent pointer for path reconstruction:
-    # parent[next_state] = previous_state
-    parent: dict[
-        tuple[int, tuple[int, int, int] | None],
-        tuple[int, tuple[int, int, int] | None] | None,
-    ] = {start_state: None}
+#     while heap and remaining:
+#         cur_dist, _, state = heapq.heappop(heap)
+#         node, prev_edge = state
 
-    # Edge used to enter each state.
-    # For start_state, there is no entering edge.
-    used_edge: dict[
-        tuple[int, tuple[int, int, int] | None],
-        tuple[int, int, int] | None,
-    ] = {start_state: None}
+#         # Skip stale heap entries
+#         if cur_dist != dist.get(state, math.inf):
+#             continue
 
-    # Priority queue entries are:
-    #   (best_distance_so_far, tie_breaker, state)
-    #
-    # The tie_breaker avoids Python needing to compare the state tuples when
-    # two distances are equal.
-    heap: list[tuple[float, int, tuple[int, tuple[int, int, int] | None]]] = []
-    counter = 0
-    heapq.heappush(heap, (0.0, counter, start_state))
+#         # If this state reaches a target, record it as optimal
+#         if node in remaining:
+#             best_target_state[node] = state
+#             best_target_dist[node] = cur_dist
+#             remaining.remove(node)
 
-    # For each target node, store the first state popped from the heap.
-    # In Dijkstra, the first popped state is optimal.
-    best_target_state: dict[int, tuple[int, tuple[int, int, int] | None]] = {}
+#             if not remaining:
+#                 break
 
-    # Store the optimal distance for each target node.
-    best_target_dist: dict[int, float] = {}
+#         # Relax all outgoing edges
+#         for _, next_node, key in G.out_edges(node, keys=True):
+#             curr_edge = (node, next_node, key)
+#             step_cost = cost(prev_edge, curr_edge, G)
 
-    # Targets still not finalized.
-    # Once all are found, we can stop early.
-    remaining = set(targets)
+#             if step_cost < 0:
+#                 raise ValueError("Dijkstra requires non-negative costs")
 
-    # Main Dijkstra loop.
-    while heap and remaining:
-        cur_dist, _, state = heapq.heappop(heap)
-        node, prev_edge = state
+#             new_dist = cur_dist + step_cost
+#             next_state = (next_node, curr_edge)
 
-        # Skip stale heap entries.
-        # This happens when a better distance to the same state was pushed later.
-        if cur_dist != dist.get(state, math.inf):
-            continue
+#             if new_dist < dist.get(next_state, math.inf):
+#                 dist[next_state] = new_dist
+#                 parent[next_state] = state
+#                 used_edge[next_state] = curr_edge
 
-        # If this popped state reaches a target node, it is the optimal arrival
-        # for that target, so record it.
-        if node in remaining:
-            best_target_state[node] = state
-            best_target_dist[node] = cur_dist
-            remaining.remove(node)
+#                 counter += 1
+#                 heapq.heappush(heap, (new_dist, counter, next_state))
 
-            # Early exit: all requested targets have been finalized.
-            if not remaining:
-                break
+#     # Build results
+#     distances: dict[int, float] = {}
+#     paths: dict[int, list[tuple[int, int, int]]] = {}
 
-        # Relax all outgoing edges from the current node.
-        for _, next_node, key in G.out_edges(node, keys=True):
-            # Current candidate edge to traverse.
-            curr_edge = (node, next_node, key)
+#     for target in targets:
+#         if target not in best_target_state:
+#             distances[target] = math.inf
+#             paths[target] = []
+#             continue
 
-            # Full step cost includes both edge cost and any turn cost.
-            step_cost = cost(prev_edge, curr_edge, G)
+#         distances[target] = best_target_dist[target]
 
-            # Dijkstra requires non-negative costs.
-            if step_cost < 0:
-                raise ValueError("Dijkstra requires non-negative costs")
+#         state = best_target_state[target]
+#         edge_path: list[tuple[int, int, int]] = []
 
-            # Total distance if we take this edge.
-            new_dist = cur_dist + step_cost
+#         while state != start_state:
+#             edge = used_edge[state]
+#             if edge is None:
+#                 break
+#             edge_path.append(edge)
+#             state = parent[state]
 
-            # New state after traversing curr_edge:
-            # we arrive at nbr, and curr_edge becomes the previous edge.
-            next_state = (next_node, curr_edge)
+#         edge_path.reverse()
+#         paths[target] = edge_path
 
-            # Standard Dijkstra relaxation.
-            if new_dist < dist.get(next_state, math.inf):
-                dist[next_state] = new_dist
-                parent[next_state] = state
-                used_edge[next_state] = curr_edge
-
-                # Push improved state to heap.
-                counter += 1
-                heapq.heappush(heap, (new_dist, counter, next_state))
-
-    # Final outputs keyed only by target node.
-    distances: dict[int, float] = {}
-    paths: dict[int, list[tuple[int, int, int]]] = {}
-
-    # Build result for each requested target.
-    for target in targets:
-        # Unreachable target.
-        if target not in best_target_state:
-            distances[target] = math.inf
-            paths[target] = []
-            continue
-
-        # Optimal distance to target.
-        distances[target] = best_target_dist[target]
-
-        # Reconstruct optimal edge path by walking parent pointers backward
-        # from the best final state.
-        state = best_target_state[target]
-        edge_path: list[tuple[int, int, int]] = []
-
-        while state != start_state:
-            edge = used_edge[state]
-            if edge is None:
-                break
-            edge_path.append(edge)
-            state = parent[state]
-
-        # Reconstruction was backward, so reverse it.
-        edge_path.reverse()
-        paths[target] = edge_path
-
-    return distances, paths
+#     return distances, paths
 
 
 def dijkstra_to_targets_edges(
@@ -267,128 +236,99 @@ def dijkstra_to_targets_edges(
     cost_fn: Callable[[nx.MultiDiGraph, tuple[int, int, int]], float],
 ) -> tuple[dict[int, float], dict[int, list[tuple[int, int, int]]]]:
     """
-    Compute shortest paths from a source node to a set of target nodes
-    using Dijkstra's algorithm.
+    Compute shortest edge-based paths from a source to multiple targets.
 
-    Key features:
-    - Works with MultiDiGraph (handles parallel edges via keys)
-    - Uses a custom edge cost function
-    - Stops early once all targets are reached (performance optimization)
-    - Returns edge-based paths instead of node-only paths
+    Dijkstra's algorithm with early termination once all targets are reached.
 
-    Args:
-        G: Directed multigraph
-        source: Starting node
-        targets: Set of target nodes we want shortest paths to
-        cost_fn: Function to compute edge cost
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Directed multigraph.
+    source : int
+        Starting node.
+    targets : set[int]
+        Target node ids.
+    cost_fn : Callable
+        Function computing edge cost: `cost_fn(G, edge) -> float`
 
-    Returns:
-        distances:
-            dict[target] -> shortest distance from source
+        where `edge = (u, v, key)`.
 
-        edge_paths:
-            dict[target] -> list of edges (u, v, k) forming the shortest path
+    Returns
+    -------
+    distances : dict[int, float]
+        Shortest distance to each reachable target.
+    edge_paths : dict[int, list[tuple[int, int, int]]]
+        Edge-based path [(u, v, key), ...] for each reachable target.
 
-        Note:
-            Only reachable targets are included in the output.
+    Raises
+    ------
+    ValueError
+        If source is not in graph or edge cost is negative.
     """
 
-    # --- Input validation ---
     if source not in G:
         raise ValueError(f"Source node {source!r} is not in the graph.")
 
-    # If no targets, nothing to compute
     if not targets:
         return {}, {}
 
-    # Track which targets we still need to find
     remaining_targets = set(targets)
-
-    # Distance from source to each node (initialized with source = 0)
     distances: dict[int, float] = {source: 0.0}
-
-    # For each node, store the edge used to reach it
-    # This allows reconstructing the path later
     predecessor_edge: dict[int, tuple[int, int, int] | None] = {source: None}
-
-    # Track finalized nodes (standard Dijkstra "visited" set)
     visited: set[int] = set()
-
-    # Priority queue storing (distance, node)
     heap: list[tuple[float, int]] = [(0.0, source)]
 
-    # --- Main Dijkstra loop ---
     while heap and remaining_targets:
-        # Get node with smallest known distance
         current_dist, u = heapq.heappop(heap)
 
-        # Skip if already processed (lazy deletion from heap)
         if u in visited:
             continue
 
-        # Mark node as finalized
         visited.add(u)
 
-        # If this node is one of our targets, mark it as found
         if u in remaining_targets:
             remaining_targets.remove(u)
 
-        # Relax all outgoing edges from u
+        # Relax all outgoing edges
         for _, v, k in G.out_edges(u, keys=True):
-            # Skip already finalized nodes
             if v in visited:
                 continue
 
             edge = (u, v, k)
-
-            # Compute edge cost using user-provided function
             edge_cost = cost_fn(G, edge)
 
-            # Dijkstra requires non-negative weights
             if edge_cost < 0:
                 raise ValueError(
                     f"Dijkstra requires non-negative edge costs, got {edge_cost} for edge {edge}."
                 )
 
-            # Compute new candidate distance
             new_dist = current_dist + edge_cost
 
-            # If we found a better path to v, update it
             if new_dist < distances.get(v, math.inf):
                 distances[v] = new_dist
-
-                # Store the edge used to reach v
                 predecessor_edge[v] = edge
-
-                # Push updated distance to heap
                 heapq.heappush(heap, (new_dist, v))
 
-    # --- Reconstruct paths for reachable targets ---
+    # Reconstruct paths
     reachable_distances: dict[int, float] = {}
     reachable_edge_paths: dict[int, list[tuple[int, int, int]]] = {}
 
     for target in targets:
-        # Skip unreachable targets
         if target not in distances:
             continue
 
         path_edges: list[tuple[int, int, int]] = []
         node = target
 
-        # Backtrack from target to source using predecessor edges
         while node != source:
             edge = predecessor_edge[node]
 
-            # Safety check (should not happen for reachable nodes)
             if edge is None:
                 break
 
             path_edges.append(edge)
-
-            # Move to previous node (u of edge u->v)
             node = edge[0]
 
-        # Reverse to get source -> target order
         path_edges.reverse()
 
         reachable_distances[target] = distances[target]
@@ -398,7 +338,14 @@ def dijkstra_to_targets_edges(
 
 
 def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
-    # Find all chosen buildings
+    """
+    Return up to two most recently selected building node ids.
+
+    Returns
+    -------
+    list[int]
+        Building node ids, sorted by selection time (oldest first).
+    """
     all_chosen_buildings = [
         (chosen_time, node)
         for node, chosen_time in G.nodes(data="chosen_time")
@@ -411,14 +358,30 @@ def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
 
 def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float:
     """
-    Calculate the cost of traversing an edge in the graph.
+    Calculate the routing cost of traversing an edge in the graph.
 
-    Args:
-        G: The graph.
-        edge: A tuple (u, v, key) representing the edge to calculate the cost for.
+    Includes base traversal cost, crossing penalties, and centrality factor.
 
-    Returns:
-        The weight of the edge.
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with edge and node attributes.
+    curr_edge : tuple[int, int, int]
+        Edge as (u, v, key).
+
+    Returns
+    -------
+    float
+        Non-negative traversal cost.
+
+    Notes
+    -----
+    Cost components:
+    - Base: COST_SIDEWALK * length (meters)
+    - Roadway penalty: COST_ROADWAY * length
+    - Crossing penalties vary by type (traffic signals, zebra, etc.)
+    - Roadway crossing exit penalty: COST_ROADWAY_CROSSING
+    - Centrality factor: scaled by 1 - (centrality / max_centrality)
     """
     prev_node, curr_node, key = curr_edge
 
@@ -453,11 +416,11 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
         penalty += config.COST_ROADWAY * length
 
     # Penalty for not following high centrality paths
-    if "centrality" in G.edges[curr_edge]:
+    if "ugv_centrality" in G.edges[curr_edge]:
         penalty += (
             config.COST_CENTRALITY_FACTOR
             * length
-            * (1 - G.edges[curr_edge]["centrality"] / G.graph["max_centrality"])
+            * (1 - G.edges[curr_edge]["ugv_centrality"] / G.graph["ugv_max_centrality"])
         )
     else:
         penalty += config.COST_CENTRALITY_FACTOR * length
@@ -466,7 +429,22 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
 
 
 def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
-    # Building node IDs
+    """
+    Compute shortest edge paths between all building-access node pairs.
+
+    Uses Dijkstra's algorithm with custom cost function. Results are stored
+    in the graph's `all_building_path_pairs` attribute.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with building-access nodes (ugv_building_access=True).
+
+    Notes
+    -----
+    Sets graph attribute:
+        G.graph["all_building_path_pairs"][(source, target)] = [(u, v, key), ...]
+    """
     chosen_buildings = set(
         node
         for node, is_ugv_building_access in G.nodes(data="ugv_building_access")
@@ -475,19 +453,6 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
 
     all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
     for source in chosen_buildings:
-        # node_paths = nx.single_source_dijkstra_path(
-        #     G,
-        #     source,
-        #     weight=lambda u, v, _: calculate_cost(G, u, v),
-        # )
-        # edge_paths = {
-        #     (source, target): [
-        #         (u, v, next(iter(G[u][v])))
-        #         for u, v in zip(node_path[:-1], node_path[1:])
-        #     ]
-        #     for target, node_path in node_paths.items()
-        #     if target in chosen_buildings
-        # }
         distances, paths = dijkstra_to_targets_edges(
             G, source, chosen_buildings, calculate_cost
         )
@@ -498,6 +463,23 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
 
 
 def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
+    """
+    Count how often each edge appears in building-to-building shortest paths.
+
+    Stores edge frequencies and maximum centrality in graph attributes for
+    route preference during pathfinding.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with precomputed all_building_path_pairs attribute.
+
+    Notes
+    -----
+    Sets:
+    - Edge attribute: `ugv_centrality` (frequency count)
+    - Graph attribute: `ugv_max_centrality` (max frequency)
+    """
     all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = (
         G.graph["all_building_path_pairs"]
     )
@@ -505,36 +487,28 @@ def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
         edge for path in all_building_path_pairs.values() for edge in path
     )
 
-    G.graph["max_centrality"] = max(centralities.values())
+    G.graph["ugv_max_centrality"] = max(centralities.values())
 
     for edge in G.edges(keys=True):
-        G.edges[edge]["centrality"] = centralities.get(edge, 0)
-
-
-# def calc_path(
-#     G: nx.MultiDiGraph,
-#     source: int | None,
-#     target: int | None,
-# ) -> list[tuple[int, int, int]]:
-#     if None in (source, target):
-#         return []
-
-#     shortest_node_path = ox.shortest_path(G, source, target, weight="weight")
-#     # Calculate the correct key of MultiDiGraph
-#     shortest_edge_path: list[tuple[int, int, int]] = []
-#     for u, v in zip(shortest_node_path[:-1], shortest_node_path[1:]):
-#         # Find the minimum-weight edge between u and v
-#         min_data = (float("inf"), 0)
-#         for key, value in G[u][v].items():
-#             min_data = min(min_data, (value["weight"], key))
-#         shortest_edge_path.append((u, v, min_data[1]))
-
-#     return shortest_edge_path
+        G.edges[edge]["ugv_centrality"] = centralities.get(edge, 0)
 
 
 def show_path(
     G: nx.MultiDiGraph,
 ) -> folium.FeatureGroup:
+    """
+    Build a Folium layer showing selected buildings and the active shortest path.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with computed paths and chosen buildings.
+
+    Returns
+    -------
+    folium.FeatureGroup
+        Layer containing selected buildings (red) and shortest path (blue).
+    """
     fg = folium.FeatureGroup(name=config.PATH_LAYER_NAME)
     ids = get_chosen_building_nodes(G)
 
@@ -570,13 +544,21 @@ def show_path(
     return fg
 
 
-def split_nearest_edge(G: nx.MultiDiGraph, x: int, y: int) -> int:
+def split_nearest_edge(G: nx.MultiDiGraph, x: float, y: float) -> int:
     """
-    Split nearest edge (assumed straight).
+    Insert a new node by splitting the nearest edge to map coordinate (x, y).
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph to modify.
+    x, y : float
+        Longitude/latitude in map CRS (config.MAP_EPSG).
 
     Returns
     -------
-    new_node_id (the inserted split node)
+    int
+        Node id of the inserted split node.
     """
     transformer = pyproj.Transformer.from_crs(
         config.MAP_EPSG,
@@ -637,7 +619,7 @@ def simplify_paths(
     line_tolerance: float,
 ) -> list[list[tuple[int, int]]]:
     """
-    Trim multiple paths based on their overlap with previously seen coordinates.
+    Trim and simplify multiple paths based on overlap with previous coordinates.
 
     The first path is kept unchanged. For each subsequent path, the function
     finds the last point (iterating from the end) that is within `tolerance`
@@ -650,20 +632,16 @@ def simplify_paths(
     Parameters
     ----------
     paths : list[list[tuple[int, int]]]
-        A list of paths, where each path is a list of (x, y) integer coordinates.
-        The first path is used as the reference and is not modified.
-    tolerance : float, default=3.0
+        List of paths, where each path is a list of (x, y) integer coordinates.
+    combination_tolerance : float
         Maximum Euclidean distance for considering two points as matching.
+    line_tolerance : float
+        Tolerance parameter for LineString.simplify() operation.
 
     Returns
     -------
     list[list[tuple[int, int]]]
-        A list of trimmed paths:
-        - The first path is unchanged.
-        - Each subsequent path contains only the suffix starting from its
-          last point that matches (within tolerance) any previously accepted
-          coordinate.
-        - Paths with no matching point are omitted.
+        Trimmed and simplified paths.
     """
     if len(paths) < 2:
         return paths
@@ -693,7 +671,24 @@ def simplify_paths(
     return simplified_paths
 
 
-def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
+def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]) -> None:
+    """
+    Compute and insert virtual premise paths from a clicked map point.
+
+    Workflow:
+    1. Download local WMS raster around click location.
+    2. Run 2D image-based routing to nearest road goals.
+    3. Simplify image-space paths.
+    4. Convert to map coordinates.
+    5. Add virtual nodes/edges to graph and connect to nearest road edges.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph to modify in-place.
+    coord : tuple[float, float]
+        Map coordinate (lon, lat) in config.MAP_EPSG.
+    """
     # Download image of the premise area
     x, y = pyproj.Transformer.from_crs(config.MAP_EPSG, config.METRIC_EPSG).transform(
         *coord[::-1]
@@ -704,7 +699,6 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]):
         x + config.BBOX_SIZE // 2,
         y + config.BBOX_SIZE // 2,
     )
-    # print(f"Calculating premise bbox: {x-500},{y-500},{x+500},{y+500}")
     url = "http://localhost:8080/service"
     params = {
         "service": "WMS",
