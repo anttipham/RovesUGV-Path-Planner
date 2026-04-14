@@ -146,19 +146,21 @@ def main():
         source, target = ids[0], ids[1]
         path_data = G.graph["all_building_path_pairs"].get((source, target))
 
-        total_cost = sum(path.calculate_cost(G, u, v) for u, v, _ in path_data)
+        total_cost = sum(path.calculate_cost(G, (u, v, key)) for u, v, key in path_data)
 
         st.header("Path details:")
 
         st.write(f"max_centrality: `{G.graph['ugv_max_centrality']}`")
 
         st.write(f"Total path cost: `{total_cost}`")
+        st.write("---")
 
         for u, v, key in path_data:
-            st.write(f"{u} -> {v}: `{path.calculate_cost(G, u, v)}`")
+            st.write(f"{u} -> {v}: `{path.calculate_cost(G, (u, v, key))}`")
             st.text(G.nodes[u])
             st.text(G.edges[u, v, key])
             st.text(G.nodes[v])
+            st.write("---")
 
     # Write path cost
     cost = G.graph["all_building_path_pairs"]
