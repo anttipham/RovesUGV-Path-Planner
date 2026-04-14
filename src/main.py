@@ -156,10 +156,10 @@ def main():
         st.write("---")
 
         for u, v, key in path_data:
-            st.write(f"{u} -> {v}: `{path.calculate_cost(G, (u, v, key))}`")
-            st.text(G.nodes[u])
-            st.text(G.edges[u, v, key])
-            st.text(G.nodes[v])
+            st.write(f"Cost {u} -> {v}: `{path.calculate_cost(G, (u, v, key))}`")
+            st.text(f"Node {u}: {G.nodes[u]}")
+            st.text(f"Edge {u} -> {v}: {G.edges[u, v, key]}")
+            st.text(f"Node {v}: {G.nodes[v]}")
             st.write("---")
 
     # Write path cost
