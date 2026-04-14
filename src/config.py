@@ -34,7 +34,7 @@ METRIC_EPSG = "EPSG:3857"  # Web Mercator projected CRS (meters)
 
 # Cost constants for routing
 COST_SIDEWALK = 0.008  # Cost per meter on sidewalk
-COST_ROADWAY = 5 * COST_SIDEWALK  # Cost per meter on roadway (5x sidewalk)
+COST_ROADWAY = 5 * COST_SIDEWALK  # Cost per meter on roadway
 COST_TRAFFIC_SIGNALS = 0  # Additional cost at traffic-signal crossings
 COST_ZEBRA_CROSSING = 2  # Additional cost at zebra/marked crossings
 COST_UNCONTROLLED_CROSSING = 5  # Additional cost at uncontrolled crossings
