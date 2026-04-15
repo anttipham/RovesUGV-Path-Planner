@@ -98,7 +98,7 @@ def _add_tile_layers(m: folium.Map) -> None:
         fmt="image/png",
         name=config.OPEN_STREET_MAP_LAYER_NAME,
         overlay=False,
-        show=True,
+        show=False,
     ).add_to(m)
 
     # Seinäjoki satellite image
@@ -109,7 +109,7 @@ def _add_tile_layers(m: folium.Map) -> None:
         fmt="image/png",
         name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
         overlay=False,
-        show=False,
+        show=True,
     ).add_to(m)
 
     # Seinäjoki topographic map
@@ -123,8 +123,7 @@ def _add_tile_layers(m: folium.Map) -> None:
         show=True,
     ).add_to(m)
 
-    # TODO: Fall back to uncached versions of the WMS layers when the MapProxy is down.
-    # # Fall back to OpenStreetMap when WMS layer is loading
+    # Debug: Fall back to uncached versions of the WMS layers when the MapProxy is down.
     # folium.TileLayer(
     #     tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
     # ).add_to(m)

@@ -17,7 +17,7 @@ SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME = "Ilmakuva"
 SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME = "Maastotiedot"
 
 # Layer names
-DRAW_LAYER_NAME = "Piirrokset"
+DRAW_LAYER_NAME = "Virtuaalipolkujen laskentamerkit"
 BUILDING_LAYER_NAME = "Rakennukset"
 ROAD_LAYER_NAME = "Tiet"
 PATH_LAYER_NAME = "Reitti"
