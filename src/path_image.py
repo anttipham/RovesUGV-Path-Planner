@@ -252,6 +252,45 @@ def dijkstra_to_multiple_goals(
 
         traversable_mask[:, :] = blocked_mask_uint8.astype(bool)
 
+    def get_move_penalty(
+        current_y: int,
+        current_x: int,
+        delta_y: int,
+        delta_x: int,
+        move_cost: float,
+    ) -> float:
+        if obstacle_cost_map is None:
+            return 0.0
+
+        neighbor_y = current_y + delta_y
+        neighbor_x = current_x + delta_x
+        cells_to_sample: List[Point]
+
+        if (abs(delta_y), abs(delta_x)) in {(2, 1), (1, 2)}:
+            step_y = 1 if delta_y > 0 else -1
+            step_x = 1 if delta_x > 0 else -1
+
+            if abs(delta_y) == 2:
+                cells_to_sample = [
+                    (current_y + step_y, current_x),
+                    (current_y + step_y, current_x + step_x),
+                    (neighbor_y, neighbor_x),
+                ]
+            else:
+                cells_to_sample = [
+                    (current_y, current_x + step_x),
+                    (current_y + step_y, current_x + step_x),
+                    (neighbor_y, neighbor_x),
+                ]
+        else:
+            cells_to_sample = [(neighbor_y, neighbor_x)]
+
+        avg_penalty = sum(
+            float(obstacle_cost_map[y, x]) for y, x in cells_to_sample
+        ) / len(cells_to_sample)
+
+        return avg_penalty * move_cost
+
     while priority_queue and remaining_goals:
         current_cost, current_node = heapq.heappop(priority_queue)
 
@@ -331,9 +370,13 @@ def dijkstra_to_multiple_goals(
 
             neighbor_node = (neighbor_y, neighbor_x)
 
-            obstacle_penalty = 0.0
-            if obstacle_cost_map is not None:
-                obstacle_penalty = float(obstacle_cost_map[neighbor_y, neighbor_x])
+            obstacle_penalty = get_move_penalty(
+                current_y,
+                current_x,
+                delta_y,
+                delta_x,
+                move_cost,
+            )
 
             new_cost = current_cost + move_cost + obstacle_penalty
 
