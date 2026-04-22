@@ -68,14 +68,21 @@ def add_draw_plugin(m: folium.Map) -> None:
         filename="roves_ugv_map_data.geojson",
         feature_group=road_layer,
         draw_options={
+            "marker": True,
+            "polygon": {
+                "shapeOptions": {
+                    "color": "#ff0000",
+                    "weight": 5,
+                    "fillColor": "#ff6666",
+                    "fillOpacity": 0.4,
+                }
+            },
             "polyline": False,
-            "polygon": False,
             "rectangle": False,
             "circle": False,
-            "marker": True,
             "circlemarker": False,
         },
-        edit_options={"edit": False, "remove": False},
+        edit_options={"edit": False, "remove": True},
     ).add_to(m)
 
 

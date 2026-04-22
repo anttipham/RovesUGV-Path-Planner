@@ -55,11 +55,16 @@ def handle_map_click():
     if not clicked_object:
         return
 
-    # Building is clicked
-    if clicked_object["geometry"]["type"] == "Polygon" and "id" in clicked_object:
-        id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
-        G: nx.MultiDiGraph = st.session_state["graph"]
-        G.nodes[id]["chosen_time"] = time.time()
+    if clicked_object["geometry"]["type"] == "Polygon":
+        # Building is clicked
+        if "id" in clicked_object:
+            id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
+            G: nx.MultiDiGraph = st.session_state["graph"]
+            G.nodes[id]["chosen_time"] = time.time()
+        else:
+            # Restriction zone is created
+            print("Restriction zone created, but not linked to any building. Ignoring.")
+            print(clicked_object)
 
     # A marker is placed
     if clicked_object["geometry"]["type"] == "Point":
