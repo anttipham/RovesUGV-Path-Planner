@@ -9,7 +9,7 @@ import osmnx as ox
 import config
 
 
-def get_building_gdf(G: nx.MultiDiGraph) -> None:
+def add_building_gdf(G: nx.MultiDiGraph) -> None:
     """
     Fetch building polygons from OpenStreetMap inside the configured area.
 
