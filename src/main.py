@@ -101,7 +101,7 @@ def main():
     if st.session_state["update_graph"]:
         G: nx.MultiDiGraph = st.session_state["graph"]
 
-        path.update_building_access(G, graph.get_building_gdf())
+        path.update_building_access(G)
         graph.add_custom_attributes(G)
 
         if config.COST_CENTRALITY_FACTOR == 0:
@@ -144,7 +144,7 @@ def main():
     ids = path.get_chosen_building_nodes(G)
     if len(ids) == 2:
         source, target = ids[0], ids[1]
-        path_data = G.graph["all_building_path_pairs"].get((source, target))
+        path_data = G.graph["ugv_all_building_path_pairs"].get((source, target))
 
         total_cost = sum(path.calculate_cost(G, (u, v, key)) for u, v, key in path_data)
 
@@ -161,9 +161,6 @@ def main():
             st.text(f"Edge {u} -> {v}: {G.edges[u, v, key]}")
             st.text(f"Node {v}: {G.nodes[v]}")
             st.write("---")
-
-    # Write path cost
-    cost = G.graph["all_building_path_pairs"]
 
     st.header("Map interaction data:")
     st.write(st.session_state)

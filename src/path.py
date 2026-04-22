@@ -26,7 +26,7 @@ import graph
 import path_image
 
 
-def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -> None:
+def update_building_access(G: nx.MultiDiGraph) -> None:
     """
     Rebuild temporary building-access connectors in the graph.
 
@@ -38,8 +38,6 @@ def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -
     ----------
     G : nx.MultiDiGraph
         Road graph to modify.
-    building_gdf : geopandas.GeoDataFrame
-        GeoDataFrame of building polygons.
     """
     # Remove existing closest node connections to the building access nodes
     edges_to_remove = [
@@ -59,6 +57,7 @@ def update_building_access(G: nx.MultiDiGraph, building_gdf: gpd.GeoDataFrame) -
 
     # Find the nearest point to be used as access way for each building
     access_ways: dict[int, tuple[int, dict]] = {}
+    building_gdf = G.graph["ugv_buildings"]
     for row in building_gdf.itertuples():
         id = row.Index[1]
 
@@ -443,7 +442,7 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
     Notes
     -----
     Sets graph attribute:
-        G.graph["all_building_path_pairs"][(source, target)] = [(u, v, key), ...]
+        G.graph["ugv_all_building_path_pairs"][(source, target)] = [(u, v, key), ...]
     """
     chosen_buildings = set(
         node
@@ -459,7 +458,7 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
         edge_paths = {(source, target): path for target, path in paths.items()}
         all_building_path_pairs.update(edge_paths)
 
-    G.graph["all_building_path_pairs"] = all_building_path_pairs
+    G.graph["ugv_all_building_path_pairs"] = all_building_path_pairs
 
 
 def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
@@ -481,7 +480,7 @@ def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
     - Graph attribute: `ugv_max_centrality` (max frequency)
     """
     all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = (
-        G.graph["all_building_path_pairs"]
+        G.graph["ugv_all_building_path_pairs"]
     )
     centralities = collections.Counter(
         edge for path in all_building_path_pairs.values() for edge in path
@@ -513,7 +512,7 @@ def show_path(
     ids = get_chosen_building_nodes(G)
 
     # Show chosen buildings
-    buildings = graph.get_building_gdf()
+    buildings = G.graph["ugv_buildings"]
     chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
     folium.GeoJson(
         chosen_buildings,
@@ -530,7 +529,7 @@ def show_path(
         return fg
 
     # Show shortest path between buildings
-    edges = G.graph["all_building_path_pairs"].get((ids[0], ids[1]), [])
+    edges = G.graph["ugv_all_building_path_pairs"].get((ids[0], ids[1]), [])
     path_graph = G.edge_subgraph(edges)
     folium.GeoJson(
         ox.graph_to_gdfs(path_graph, nodes=False),

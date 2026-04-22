@@ -151,9 +151,14 @@ def _add_tile_layers(m: folium.Map) -> None:
     # ).add_to(m)
 
 
-def make_buildings() -> folium.GeoJson:
+def make_buildings(G: nx.MultiDiGraph) -> folium.GeoJson:
     """
     Build a GeoJson layer displaying building polygons.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph containing building data.
 
     Returns
     -------
@@ -161,7 +166,7 @@ def make_buildings() -> folium.GeoJson:
         GeoJson layer with building features.
     """
     return folium.GeoJson(
-        graph.get_building_gdf(),
+        G.graph["ugv_buildings"],
         name=config.BUILDING_LAYER_NAME,
         style_function=lambda _: {
             "color": "black",
@@ -287,7 +292,7 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
 
     # Construct map layers
     _add_tile_layers(m)
-    make_buildings().add_to(m)
+    make_buildings(G).add_to(m)
     make_roads(G).add_to(m)
     make_crossings(G).add_to(m)
 

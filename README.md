@@ -67,13 +67,24 @@ You can override centrality factor from query params:
 
 ## Routing Model Notes
 
-Custom edge/node attributes used by the app:
+Custom edge/node attributes used by the app.
 
-- `ugv_sidewalk=True` (edge): edge is sidewalk-eligible, making it suitable for UGV navigation.
-- `ugv_building_access=True` (node): Access points for buildings from or to which paths are calculated. These nodes have the same ID as the buildings they represent. If a building does not have a building access node, it is automatically added to the network at the center of the building.
-- `ugv_closest_node_connection=True` (edge): temporary building-to-network connector
-- `ugv_virtual=True` (edge): virtual premise path edge
-- `centrality=True` (edge): path-frequency count across building pairs
+Graph attributes:
+
+- `ugv_buildings`: GeoDataFrame of building polygons, indexed by OSM feature ID. This is used for building access node generation and choosing path endpoints.
+- `ugv_max_centrality`: maximum centrality value across all edges, used for normalizing centrality penalties.
+- `ugv_all_building_path_pairs`: dict mapping building node pairs to their shortest path edges.
+
+Node attributes:
+
+- `ugv_building_access=True`: Access points for buildings from or to which paths are calculated. These nodes have the same ID as the buildings they represent. If a building does not have a building access node, it is automatically added to the network at the center of the building.
+
+Edge attributes:
+
+- `ugv_sidewalk=True`: edge is sidewalk-eligible, making it suitable for UGV navigation.
+- `ugv_closest_node_connection=True`: temporary building-to-network connector
+- `ugv_virtual=True`: virtual premise path edge
+- `ugv_centrality=True`: path-frequency count across building pairs
 
 ## Troubleshooting
 

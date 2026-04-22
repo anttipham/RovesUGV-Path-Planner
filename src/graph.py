@@ -9,20 +9,20 @@ import osmnx as ox
 import config
 
 
-def get_building_gdf() -> gpd.GeoDataFrame:
+def get_building_gdf(G: nx.MultiDiGraph) -> None:
     """
     Fetch building polygons from OpenStreetMap inside the configured area.
 
-    Returns
-    -------
-    geopandas.GeoDataFrame
-        Building features indexed by OSM feature id.
+    Notes
+    -----
+    Sets:
+    - Graph attribute: `ugv_buildings` (building GeoDataFrame with OSM tags)
     """
     gdf = ox.features_from_polygon(
         config.AREA_POLYGON,
         {"building": True},
     )
-    return gdf
+    G.graph["ugv_buildings"] = gdf
 
 
 def create_road_graph() -> nx.MultiDiGraph:
@@ -72,4 +72,14 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
     # Mark crossing nodes used for crossing penalties
     for node in G.nodes():
         if G.nodes[node].get("highway") == "crossing":
+            G.nodes[node]["ugv_crossing"] = True
+
+    # Roadway crossings should always be penalized, even if not tagged as crossings
+    for node in G.nodes():
+        roadways = [
+            (u, v, key)
+            for u, v, key, data in G.edges(node, keys=True, data=True)
+            if not data.get("ugv_sidewalk", False)
+        ]
+        if len(roadways) > 2:
             G.nodes[node]["ugv_crossing"] = True
