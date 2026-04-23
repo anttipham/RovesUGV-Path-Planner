@@ -25,6 +25,8 @@ import config
 import graph
 import path_image
 
+transformer_to_metric = pyproj.Transformer.from_crs(config.MAP_EPSG, config.METRIC_EPSG)
+
 
 def update_building_access(G: nx.MultiDiGraph) -> None:
     """
@@ -296,6 +298,9 @@ def dijkstra_to_targets_edges(
             edge = (u, v, k)
             edge_cost = cost_fn(G, edge)
 
+            if edge_cost == math.inf:
+                continue
+
             if edge_cost < 0:
                 raise ValueError(
                     f"Dijkstra requires non-negative edge costs, got {edge_cost} for edge {edge}."
@@ -384,6 +389,26 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
     """
     prev_node, curr_node, key = curr_edge
 
+    # Skip edges intersecting with the restricted zones
+    # Metric CRS is used for accurate intersection checks
+    edge_geom_metric = LineString(
+        [
+            transformer_to_metric.transform(
+                G.nodes[prev_node]["y"], G.nodes[prev_node]["x"]
+            ),
+            transformer_to_metric.transform(
+                G.nodes[curr_node]["y"], G.nodes[curr_node]["x"]
+            ),
+        ]
+    )
+
+    if any(
+        edge_geom_metric.intersects(zone)
+        for zone in G.graph.get("ugv_restricted_zones_metric", [])
+    ):
+        return math.inf
+
+    # Warning
     if "ugv_sidewalk" not in G.edges[curr_edge]:
         print(
             f"Warning: edge {G.edges[curr_edge]} between {G.nodes[curr_edge[0]]} "
@@ -490,57 +515,6 @@ def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
 
     for edge in G.edges(keys=True):
         G.edges[edge]["ugv_centrality"] = centralities.get(edge, 0)
-
-
-def show_path(
-    G: nx.MultiDiGraph,
-) -> folium.FeatureGroup:
-    """
-    Build a Folium layer showing selected buildings and the active shortest path.
-
-    Parameters
-    ----------
-    G : nx.MultiDiGraph
-        Graph with computed paths and chosen buildings.
-
-    Returns
-    -------
-    folium.FeatureGroup
-        Layer containing selected buildings (red) and shortest path (blue).
-    """
-    fg = folium.FeatureGroup(name=config.PATH_LAYER_NAME)
-    ids = get_chosen_building_nodes(G)
-
-    # Show chosen buildings
-    buildings = G.graph["ugv_buildings"]
-    chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
-    folium.GeoJson(
-        chosen_buildings,
-        style_function=lambda _: {
-            "fillColor": "red",
-            "color": "black",
-            "weight": 3,
-            "fillOpacity": 0.5,
-        },
-    ).add_to(fg)
-
-    # Path requires a (1) source and (2) target node
-    if len(ids) < 2:
-        return fg
-
-    # Show shortest path between buildings
-    edges = G.graph["ugv_all_building_path_pairs"].get((ids[0], ids[1]), [])
-    path_graph = G.edge_subgraph(edges)
-    folium.GeoJson(
-        ox.graph_to_gdfs(path_graph, nodes=False),
-        style_function=lambda _: {
-            "color": "#007AD1",
-            "weight": 4,
-            "opacity": 1,
-        },
-    ).add_to(fg)
-
-    return fg
 
 
 def split_nearest_edge(G: nx.MultiDiGraph, x: float, y: float) -> int:

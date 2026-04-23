@@ -71,9 +71,10 @@ Custom edge/node attributes used by the app.
 
 Graph attributes:
 
+- `ugv_all_building_path_pairs`: dict mapping building node pairs to their shortest path edges.
 - `ugv_buildings`: GeoDataFrame of building polygons, indexed by OSM feature ID. This is used for building access node generation and choosing path endpoints.
 - `ugv_max_centrality`: maximum centrality value across all edges, used for normalizing centrality penalties.
-- `ugv_all_building_path_pairs`: dict mapping building node pairs to their shortest path edges.
+- `ugv_restricted_zones_metric`: list of user-drawn restricted zones in metric coordinates, used for path penalty calculations.
 
 Node attributes:
 
@@ -81,10 +82,10 @@ Node attributes:
 
 Edge attributes:
 
-- `ugv_sidewalk=True`: edge is sidewalk-eligible, making it suitable for UGV navigation.
-- `ugv_closest_node_connection=True`: temporary building-to-network connector
-- `ugv_virtual=True`: virtual premise path edge
 - `ugv_centrality=True`: path-frequency count across building pairs
+- `ugv_closest_node_connection=True`: temporary building-to-network connector
+- `ugv_sidewalk=True`: edge is sidewalk-eligible, making it suitable for UGV navigation.
+- `ugv_virtual=True`: virtual premise path edge
 
 ## Troubleshooting
 

@@ -27,6 +27,7 @@ import time
 
 import folium
 import networkx as nx
+import pyproj
 import streamlit as st
 from streamlit_folium import st_folium
 
@@ -34,6 +35,7 @@ import config
 import map
 import graph
 import path
+import shapely
 
 
 def handle_map_click():
@@ -50,21 +52,31 @@ def handle_map_click():
        - Sets `update_graph` flag to refresh centrality and path pairs.
     """
     clicked_object = st.session_state["map"]["last_active_drawing"]
+    G: nx.MultiDiGraph = st.session_state["graph"]
 
     # Nothing is clicked
     if not clicked_object:
         return
 
     if clicked_object["geometry"]["type"] == "Polygon":
-        # Building is clicked
+        # Click building
         if "id" in clicked_object:
             id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
-            G: nx.MultiDiGraph = st.session_state["graph"]
             G.nodes[id]["chosen_time"] = time.time()
         else:
-            # Restriction zone is created
-            print("Restriction zone created, but not linked to any building. Ignoring.")
-            print(clicked_object)
+            # Add restricted zone in metric CRS
+            transformer = pyproj.Transformer.from_crs(
+                config.MAP_EPSG,
+                config.METRIC_EPSG,
+            )
+            metric_coords = [
+                transformer.transform(lat, lon)
+                for lon, lat in clicked_object["geometry"]["coordinates"][0]
+            ]
+            restricted_zone = shapely.Polygon(metric_coords)
+            shapely.prepare(restricted_zone)
+            G.graph["ugv_restricted_zones_metric"].append(restricted_zone)
+            st.session_state["update_graph"] = True
 
     # A marker is placed
     if clicked_object["geometry"]["type"] == "Point":
@@ -135,13 +147,16 @@ def main():
     # Load and build the map
     m = map.build_map(G)
 
+    # Dynamically changing map features
+    map_interaction_features = map.create_features(G)
+
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
         m,
         key="map",
         use_container_width=True,
         returned_objects=["last_active_drawing"],
-        feature_group_to_add=path.show_path(G),
+        feature_group_to_add=map_interaction_features,
         on_change=handle_map_click,
         layer_control=folium.LayerControl(),
     )

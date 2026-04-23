@@ -49,6 +49,9 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
 
     Added attributes
     ----------------
+    Graph:
+        ugv_restricted_zones_metric : list of shapely.Polygon
+            Polygons drawn by the user to restrict UGV traversal.
     Edge:
         ugv_sidewalk : bool
             True if edge is considered sidewalk-traversable.
@@ -58,6 +61,10 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
     """
     # Ensure edge lengths exist (meters)
     ox.distance.add_edge_lengths(G)
+
+    # Initialize graph attribute for user-drawn restricted zones
+    if "ugv_restricted_zones_metric" not in G.graph:
+        G.graph["ugv_restricted_zones_metric"] = []
 
     # Mark sidewalk-eligible edges for UGV routing
     for u, v, key, data in G.edges(keys=True, data=True):

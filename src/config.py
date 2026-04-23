@@ -17,11 +17,12 @@ SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME = "Ilmakuva"
 SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME = "Maastotiedot"
 
 # Layer names
-DRAW_LAYER_NAME = "Virtuaalipolkujen laskentamerkit"
+DRAW_LAYER_NAME = "Piirtotaso"
 BUILDING_LAYER_NAME = "Rakennukset"
 ROAD_LAYER_NAME = "Tiet"
 PATH_LAYER_NAME = "Reitti"
-CROSSINGS_LAYER_NAME = "Risteykset"
+CROSSING_LAYER_NAME = "Risteykset"
+RESTRICTED_ZONES_LAYER_NAME = "Rajoitetut alueet"
 
 # OSMnx constants
 TAGS_WAY = ["foot", "bicycle"]
@@ -53,7 +54,7 @@ GRADUAL_OBSTACLE_COST_RADIUS = (
 BBOX_SIZE = 1000  # Size (meters) of bounding box around clicked point
 BBOX_IMAGE_SIZE = 512  # Resolution (pixels) of downloaded raster tiles
 SIMPLIFICATION_COMBINATION_TOLERANCE = 3  # Distance (pixels) for path merging
-SIMPLIFICATION_LINE_TOLERANCE = 2  # Tolerance for LineString.simplify()
+SIMPLIFICATION_LINE_TOLERANCE = 3  # Tolerance for LineString.simplify()
 
 # Map features of Roves area
 START_LOCATION = (62.781708, 22.894071)  # in EPSG:4326

@@ -16,6 +16,7 @@ from folium.plugins import Draw
 
 import config
 import graph
+import path
 
 LEAFLET_STYLING = """
     <style>
@@ -37,6 +38,8 @@ def create_editable_road_layer() -> folium.FeatureGroup:
     """
     editable_road_layer = folium.FeatureGroup(
         name=config.DRAW_LAYER_NAME,
+        show=False,
+        control=False,
     )
     edges = gpd.GeoDataFrame()
 
@@ -82,7 +85,7 @@ def add_draw_plugin(m: folium.Map) -> None:
             "circle": False,
             "circlemarker": False,
         },
-        edit_options={"edit": False, "remove": True},
+        edit_options={"edit": False, "remove": False},
     ).add_to(m)
 
 
@@ -174,7 +177,6 @@ def make_buildings(G: nx.MultiDiGraph) -> folium.GeoJson:
     """
     return folium.GeoJson(
         G.graph["ugv_buildings"],
-        name=config.BUILDING_LAYER_NAME,
         style_function=lambda _: {
             "color": "black",
             "weight": 1,
@@ -240,7 +242,6 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
 
     return folium.GeoJson(
         ox.graph_to_gdfs(G, nodes=False),
-        name=config.ROAD_LAYER_NAME,
         style_function=style,
     )
 
@@ -266,7 +267,6 @@ def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
     gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
     return folium.GeoJson(
         gdf,
-        name=config.CROSSINGS_LAYER_NAME,
         marker=folium.CircleMarker(
             radius=2, color="black", fill=True, fill_opacity=0.7
         ),
@@ -299,9 +299,6 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
 
     # Construct map layers
     _add_tile_layers(m)
-    make_buildings(G).add_to(m)
-    make_roads(G).add_to(m)
-    make_crossings(G).add_to(m)
 
     # Add draw plugin to the map
     add_draw_plugin(m)
@@ -310,3 +307,85 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     m.get_root().header.add_child(folium.Element(LEAFLET_STYLING))
 
     return m
+
+
+def create_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
+    """
+    Build a Folium layer showing all features
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with computed paths and chosen buildings.
+
+    Returns
+    -------
+    list[folium.FeatureGroup]
+        List of feature groups containing all map features.
+    """
+    features = []
+
+    # Show street network and buildings
+    features.append(
+        folium.FeatureGroup(name=config.ROAD_LAYER_NAME).add_child(make_roads(G))
+    )
+    features.append(
+        folium.FeatureGroup(name=config.BUILDING_LAYER_NAME).add_child(
+            make_buildings(G)
+        )
+    )
+    features.append(
+        folium.FeatureGroup(name=config.CROSSING_LAYER_NAME).add_child(
+            make_crossings(G)
+        )
+    )
+
+    # Show chosen buildings and the path between them
+    building_path = folium.FeatureGroup(name=config.PATH_LAYER_NAME, control=True)
+    ids = path.get_chosen_building_nodes(G)
+    buildings = G.graph["ugv_buildings"]
+    chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
+    folium.GeoJson(
+        chosen_buildings,
+        style_function=lambda _: {
+            "fillColor": "#0095FF",
+            "color": "black",
+            "weight": 3,
+            "fillOpacity": 0.4,
+        },
+    ).add_to(building_path)
+    # Path requires a (1) source and (2) target node
+    if len(ids) >= 2:
+        # Show shortest path between buildings
+        edges = G.graph["ugv_all_building_path_pairs"].get((ids[0], ids[1]), [])
+        path_graph = G.edge_subgraph(edges)
+        folium.GeoJson(
+            ox.graph_to_gdfs(path_graph, nodes=False),
+            style_function=lambda _: {
+                "color": "#007AD1",
+                "weight": 4,
+                "opacity": 1,
+            },
+        ).add_to(building_path)
+    features.append(building_path)
+
+    # Show user-drawn restricted zones
+    restricted_zone_layer = folium.FeatureGroup(name=config.RESTRICTED_ZONES_LAYER_NAME)
+    for metric_zone in G.graph["ugv_restricted_zones_metric"]:
+        # Convert back to geographic coordinates for display
+        zone = ox.projection.project_geometry(
+            metric_zone, crs=config.METRIC_EPSG, to_crs=config.MAP_EPSG
+        )[0]
+        folium.GeoJson(
+            zone,
+            style_function=lambda _: {
+                "color": "#ff0000",
+                "weight": 3,
+                "fillColor": "#ff6666",
+                "fillOpacity": 0.4,
+            },
+            name=config.RESTRICTED_ZONES_LAYER_NAME,
+        ).add_to(restricted_zone_layer)
+    features.append(restricted_zone_layer)
+
+    return features
