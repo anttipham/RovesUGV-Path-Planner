@@ -93,7 +93,7 @@ Edge attributes:
 - If graph/path updates seem stale, place a new marker or refresh session state.
 - First graph build can be slow due to OSM fetch + path-pair centrality computation.
 
-## Todos
+## Todos and Improvements
 
 - Optimize caching.
 - Update edge lengths when a new edge is added. Length is now calculated for each edge on every update.

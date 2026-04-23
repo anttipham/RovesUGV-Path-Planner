@@ -9,7 +9,6 @@ location to reachable road-connection points in image space.
 from __future__ import annotations
 
 import heapq
-from typing import Dict, List, Optional, Tuple
 
 import cv2
 import geopandas as gpd
@@ -18,12 +17,12 @@ import numpy as np
 import osmnx as ox
 from rasterio.features import rasterize
 from rasterio.transform import from_bounds
-from shapely.geometry import box
+from shapely.geometry import Polygon, box
 
 import config
 
-BoundingBox = Tuple[float, float, float, float]  # (min_x, min_y, max_x, max_y)
-Point = Tuple[int, int]  # (row, col)
+BoundingBox = tuple[float, float, float, float]  # (min_x, min_y, max_x, max_y)
+Point = tuple[int, int]  # (row, col)
 
 
 def build_traversable_mask(
@@ -102,7 +101,7 @@ def compute_obstacle_cost_map(traversable: np.ndarray, max_distance) -> np.ndarr
         current_ring_mask = (
             (dilated_obstacle_mask > 0) & (assigned_mask == 0) & traversable
         )
-        penalty = float(max_distance - distance)  # 4, 3, 2, 1
+        penalty = float(max_distance - distance)
 
         obstacle_cost_map[current_ring_mask] = penalty
         assigned_mask[current_ring_mask] = 1
@@ -138,10 +137,10 @@ def find_center_free_cell(traversable: np.ndarray) -> Point:
             if traversable[p]:
                 return p
 
-    return center  # Fallback, should not happen if there's any free cell at all
+    return center
 
 
-def extract_goal_points(goal_mask: np.ndarray) -> List[Point]:
+def extract_goal_points(goal_mask: np.ndarray) -> list[Point]:
     """
     Convert a binary goal mask into a list of goal cells.
     Nonzero pixels are goals.
@@ -153,14 +152,79 @@ def extract_goal_points(goal_mask: np.ndarray) -> List[Point]:
     return list(zip(ys.tolist(), xs.tolist()))
 
 
+def restricted_zone_mask_from_polygons(
+    restricted_zones: list[Polygon],
+    bbox: BoundingBox,
+    mask_height: int,
+    mask_width: int,
+) -> np.ndarray:
+    """
+    Rasterize restricted-zone polygons into image space.
+
+    Parameters
+    ----------
+    restricted_zones : list[Polygon]
+        Restricted polygons in the same metric CRS as bbox.
+    bbox : tuple[float, float, float, float]
+        Bounding box as (min_x, min_y, max_x, max_y) in EPSG:3857 / metric CRS.
+    mask_height : int
+        Output mask height in pixels.
+    mask_width : int
+        Output mask width in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        Binary mask of restricted zones, shape (mask_height, mask_width), dtype=uint8.
+        1 means restricted.
+    """
+    if not restricted_zones:
+        return np.zeros((mask_height, mask_width), dtype=np.uint8)
+
+    min_x, min_y, max_x, max_y = bbox
+    bbox_polygon = box(min_x, min_y, max_x, max_y)
+
+    clipped_shapes = []
+    for geom in restricted_zones:
+        if geom is None or geom.is_empty:
+            continue
+        clipped = geom.intersection(bbox_polygon)
+        if not clipped.is_empty:
+            clipped_shapes.append((clipped, 1))
+
+    if not clipped_shapes:
+        return np.zeros((mask_height, mask_width), dtype=np.uint8)
+
+    transform = from_bounds(
+        west=min_x,
+        south=min_y,
+        east=max_x,
+        north=max_y,
+        width=mask_width,
+        height=mask_height,
+    )
+
+    restricted_mask = rasterize(
+        shapes=clipped_shapes,
+        out_shape=(mask_height, mask_width),
+        transform=transform,
+        fill=0,
+        default_value=1,
+        all_touched=True,
+        dtype=np.uint8,
+    )
+
+    return restricted_mask
+
+
 def dijkstra_to_multiple_goals(
     traversable: np.ndarray,
     start: Point,
-    goal_points: List[Point],
+    goal_points: list[Point],
     return_all_paths: bool = True,
     goal_block_diameter: int = 75,
-    obstacle_cost_map: Optional[np.ndarray] = None,
-) -> Dict[Point, List[Point]]:
+    obstacle_cost_map: np.ndarray | None = None,
+) -> dict[Point, list[Point]]:
     """
     Run Dijkstra from one start to multiple goal cells.
 
@@ -179,7 +243,7 @@ def dijkstra_to_multiple_goals(
         If False, stop after the first reachable goal.
     goal_block_diameter : int
         Diameter of the blocking circle drawn around each reached goal.
-    obstacle_cost_map : Optional[np.ndarray]
+    obstacle_cost_map : np.ndarray | None
         Extra per-cell movement penalty for being near obstacles.
     """
     height, width = traversable.shape
@@ -220,16 +284,16 @@ def dijkstra_to_multiple_goals(
         (1, 2, 5**0.5),
     ]
 
-    distance_map: Dict[Point, float] = {start: 0.0}
-    parent_map: Dict[Point, Optional[Point]] = {start: None}
-    priority_queue: List[Tuple[float, Point]] = [(0.0, start)]
-    reached_goal_paths: Dict[Point, List[Point]] = {}
+    distance_map: dict[Point, float] = {start: 0.0}
+    parent_map: dict[Point, Point | None] = {start: None}
+    priority_queue: list[tuple[float, Point]] = [(0.0, start)]
+    reached_goal_paths: dict[Point, list[Point]] = {}
 
     goal_block_radius = goal_block_diameter // 2
 
-    def reconstruct_path(goal_node: Point) -> List[Point]:
-        path: List[Point] = []
-        current_node: Optional[Point] = goal_node
+    def reconstruct_path(goal_node: Point) -> list[Point]:
+        path: list[Point] = []
+        current_node: Point | None = goal_node
 
         while current_node is not None:
             path.append(current_node)
@@ -264,7 +328,7 @@ def dijkstra_to_multiple_goals(
 
         neighbor_y = current_y + delta_y
         neighbor_x = current_x + delta_x
-        cells_to_sample: List[Point]
+        cells_to_sample: list[Point]
 
         if (abs(delta_y), abs(delta_x)) in {(2, 1), (1, 2)}:
             step_y = 1 if delta_y > 0 else -1
@@ -395,7 +459,7 @@ def shortest_path_to_any_goal(
     traversable: np.ndarray,
     start: Point,
     goal_mask: np.ndarray,
-) -> Optional[List[Point]]:
+) -> list[Point] | None:
     """
     Return the shortest path from start to any goal pixel.
     """
@@ -417,14 +481,15 @@ def shortest_path_to_any_goal(
 
 def overlay_path(
     map_img: np.ndarray,
-    path: List[Point],
-    start: Optional[Point] = None,
-    goals: Optional[List[Point]] = None,
-    blocked_goals: Optional[List[Point]] = None,
+    path: list[Point],
+    start: Point | None = None,
+    goals: list[Point] | None = None,
+    blocked_goals: list[Point] | None = None,
     block_diameter: int = 75,
+    restricted_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """
-    Draw path, start, goals, and blocked goal regions on the image.
+    Draw path, start, goals, blocked goal regions, and restricted zones on the image.
 
     Parameters
     ----------
@@ -436,6 +501,8 @@ def overlay_path(
         Goals where suppression circles were applied
     block_diameter : int
         Diameter of suppression circles
+    restricted_mask : optional np.ndarray
+        Binary mask of restricted zones to overlay (1 means restricted)
     """
     if map_img.ndim == 2:
         vis = cv2.cvtColor(map_img, cv2.COLOR_GRAY2BGR)
@@ -445,6 +512,11 @@ def overlay_path(
     overlay = vis.copy()
     alpha = 0.3
     radius = block_diameter // 2
+
+    if restricted_mask is not None:
+        overlay[restricted_mask > 0] = (0, 0, 255)
+        vis = cv2.addWeighted(overlay, alpha, vis, 1 - alpha, 0)
+        overlay = vis.copy()
 
     if blocked_goals is not None:
         for goal_y, goal_x in blocked_goals:
@@ -614,7 +686,7 @@ def test(G, map_img, bbox):
                 start=start,
                 goals=goal_points,
                 blocked_goals=blocked_goals,
-                block_diameter=75,
+                block_diameter=config.GOAL_BLOCK_DIAMETER,
             )
         cv2.imwrite("path_debug.png", vis)
         print(paths)
@@ -625,14 +697,27 @@ def calc_2d_premise_paths(
     map_img: np.ndarray,
     bbox: BoundingBox,
     debug_img: bool = False,
-) -> Dict[Point, List[Point]]:
+) -> dict[Point, list[Point]]:
     traversable = build_traversable_mask(
         map_img,
         threshold=config.TRAVERSABLE_THRESHOLD,
         free_is_dark=True,
         erode_obstacles=config.MINIMUM_OBSTACLE_DISTANCE,
     )
+
+    restricted_zones = G.graph.get("ugv_restricted_zones_metric", [])
+    restricted_mask = restricted_zone_mask_from_polygons(
+        restricted_zones=restricted_zones,
+        bbox=bbox,
+        mask_height=config.BBOX_IMAGE_SIZE,
+        mask_width=config.BBOX_IMAGE_SIZE,
+    )
+
+    # Prevent paths from entering or continuing through restricted zones.
+    traversable[restricted_mask > 0] = False
+
     start = find_center_free_cell(traversable)
+
     obstacle_cost_map = compute_obstacle_cost_map(
         traversable, config.GRADUAL_OBSTACLE_COST_RADIUS
     )
@@ -660,7 +745,8 @@ def calc_2d_premise_paths(
             start=start,
             goals=goal_points,
             blocked_goals=blocked_goals,
-            block_diameter=75,
+            block_diameter=config.GOAL_BLOCK_DIAMETER,
+            restricted_mask=restricted_mask,
         )
 
     if debug_img:
