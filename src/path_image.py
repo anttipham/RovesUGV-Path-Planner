@@ -77,7 +77,7 @@ def compute_obstacle_cost_map(traversable: np.ndarray, max_distance) -> np.ndarr
     """
     Compute a soft obstacle penalty map using exact pixel rings around obstacles.
 
-    Cost rules for max_distance=5:
+    Cost rules for max_distance=4:
         1 pixel from obstacle -> +4
         2 pixels from obstacle -> +3
         3 pixels from obstacle -> +2
@@ -638,13 +638,13 @@ def goal_mask_from_osmnx_graph(
     return goal_mask
 
 
-def test(G, map_img, bbox):
-    # map_img = cv2.imread("start.png", cv2.IMREAD_GRAYSCALE)
-    # goal_mask = cv2.imread("goal_mask.png", cv2.IMREAD_GRAYSCALE)
-    goal_mask = goal_mask_from_osmnx_graph(G, bbox, mask_height=512, mask_width=512)
+def test():
+    map_img = cv2.imread("imgs/heatmac1.png", cv2.IMREAD_GRAYSCALE)
+    goal_mask = cv2.imread("imgs/goal_mask.png", cv2.IMREAD_GRAYSCALE)
+    # goal_mask = goal_mask_from_osmnx_graph(G, bbox, mask_height=512, mask_width=512)
 
     # For debugging: save the goal mask image
-    cv2.imwrite("goal_mask.png", goal_mask)
+    # cv2.imwrite("goal_mask.png", goal_mask)
 
     traversable = build_traversable_mask(
         map_img,
@@ -654,6 +654,13 @@ def test(G, map_img, bbox):
     )
 
     obstacle_cost_map = compute_obstacle_cost_map(traversable, 5)
+    print("Obstacle cost map:")
+    # print all cells
+    for y in range(obstacle_cost_map.shape[0]):
+        for x in range(obstacle_cost_map.shape[1]):
+            print(f"{int(obstacle_cost_map[y, x])}", end="")
+        print()
+    return
 
     start = find_center_free_cell(traversable)
 

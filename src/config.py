@@ -43,18 +43,19 @@ COST_ROADWAY_CROSSING = 30  # Penalty for exiting a crossing onto a roadway
 COST_CENTRALITY_FACTOR = 0  # Multiplier for edge centrality penalty (0 = disabled)
 
 # 2D raster pathfinding constants
+GRADUAL_OBSTACLE_COST_RADIUS = (
+    4  # Max distance (pixels) for soft obstacle penalty rings
+)
+SIMPLIFICATION_COMBINATION_TOLERANCE = 3  # Distance (pixels) for path merging
+SIMPLIFICATION_LINE_TOLERANCE = 3  # Tolerance for LineString.simplify()
+
 TRAVERSABLE_THRESHOLD = (
     98  # Grayscale threshold to distinguish free space from obstacles
 )
 GOAL_BLOCK_DIAMETER = 75  # Diameter (pixels) of suppression circle around reached goals
 MINIMUM_OBSTACLE_DISTANCE = 2  # Dilation radius (pixels) for obstacle safety margin
-GRADUAL_OBSTACLE_COST_RADIUS = (
-    5  # Max distance (pixels) for soft obstacle penalty rings
-)
 BBOX_SIZE = 1000  # Size (meters) of bounding box around clicked point
 BBOX_IMAGE_SIZE = 512  # Resolution (pixels) of downloaded raster tiles
-SIMPLIFICATION_COMBINATION_TOLERANCE = 3  # Distance (pixels) for path merging
-SIMPLIFICATION_LINE_TOLERANCE = 3  # Tolerance for LineString.simplify()
 
 # Map features of Roves area
 START_LOCATION = (62.781708, 22.894071)  # in EPSG:4326
