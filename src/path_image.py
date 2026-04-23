@@ -75,38 +75,23 @@ def build_traversable_mask(
 
 def compute_obstacle_cost_map(traversable: np.ndarray, max_distance) -> np.ndarray:
     """
-    Compute a soft obstacle penalty map using exact pixel rings around obstacles.
+    Compute obstacle closeness cost using Euclidean distance to the obstacles in the
+    traversable mask.
 
-    Cost rules for max_distance=4:
-        1 pixel from obstacle -> +4
-        2 pixels from obstacle -> +3
-        3 pixels from obstacle -> +2
-        4 pixels from obstacle -> +1
-        5 pixels or farther -> +0
-
-    This version uses repeated dilation of the obstacle mask, which gives stable,
-    intuitive rings and avoids distance-transform bucketing issues.
+    Cost rules:
+        distance d -> cost = max(max_distance - d, 0)
     """
-    obstacle_mask = (~traversable).astype(np.uint8)
-    obstacle_cost_map = np.zeros(traversable.shape, dtype=np.float32)
+    # Distance to nearest obstacle (Euclidean distance)
+    dist_map = cv2.distanceTransform(
+        traversable.astype(np.uint8),  # distance to zero pixels (obstacles)
+        distanceType=cv2.DIST_L2,
+        maskSize=5,
+    )
 
-    # Track already-assigned free cells so each cell only gets the strongest penalty once.
-    assigned_mask = obstacle_mask.copy()
+    # Convert distance to cost
+    obstacle_cost_map = np.clip(max_distance - dist_map, 0, None)
 
-    kernel = np.ones((3, 3), dtype=np.uint8)
-
-    for distance in range(1, max_distance):
-        dilated_obstacle_mask = cv2.dilate(obstacle_mask, kernel, iterations=distance)
-
-        current_ring_mask = (
-            (dilated_obstacle_mask > 0) & (assigned_mask == 0) & traversable
-        )
-        penalty = float(max_distance - distance)
-
-        obstacle_cost_map[current_ring_mask] = penalty
-        assigned_mask[current_ring_mask] = 1
-
-    return obstacle_cost_map
+    return obstacle_cost_map.astype(np.float32)
 
 
 def find_center_free_cell(traversable: np.ndarray) -> Point:
