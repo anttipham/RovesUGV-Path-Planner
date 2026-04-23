@@ -101,4 +101,5 @@ Edge attributes:
 - Disable the screen from going dark when the app is doing heavy computations. (Maybe with CSS or JavaScript?)
 - Modify parameters for the pathfinding algorithm from the UI. Currently, the parameters are set from the config.py file and betweeness centrality factor can be set via query params, e.g. `http://localhost:8501/?cb=0.5`.
 - In some cases, the end of the virtual path does not connect to another virtual path when multiple access points to the street network is found. The reason for this is currently unknown, but it is most likely related to the way the virtual paths split the graph (split_nearest_edge) in [path.calc_premise_path](/src/path.py).
+- Rename folium.Draw plugin toolbar button names to be more intuitive. Currently, the "Polygon" tool is used for drawing restricted zones and the "Marker" tool is used for placing building access points.
 - If needed, a turn-aware Dijkstra's algorithm could be used instead to track turning from a sidewalk (`ugv_sidewalk=True`) to a roadway (`ugv_sidewalk=False`).
