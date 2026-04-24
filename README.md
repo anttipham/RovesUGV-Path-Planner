@@ -79,6 +79,8 @@ Graph attributes:
 Node attributes:
 
 - `ugv_building_access=True`: Access points for buildings from or to which paths are calculated. These nodes have the same ID as the buildings they represent. If a building does not have a building access node, it is automatically added to the network at the center of the building.
+- `ugv_crossing=True`: node is tagged as a pedestrian crossing, used for additional penalties when crossing roadways.
+- `ugv_roadway_intersection=True`: node is connected to 3 or more roadway edges, used for additional penalties.
 
 Edge attributes:
 

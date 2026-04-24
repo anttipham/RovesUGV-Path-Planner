@@ -429,9 +429,9 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
             case _:
                 penalty += config.COST_UNCONTROLLED_CROSSING
 
-    # Extra penalty for leaving crossings on roadways
+    # Extra penalty for using roadway intersections on roadways
     if not G.edges[curr_edge].get("ugv_sidewalk") and G.nodes[prev_node].get(
-        "ugv_crossing"
+        "ugv_roadway_intersection"
     ):
         penalty += config.COST_ROADWAY_CROSSING
 

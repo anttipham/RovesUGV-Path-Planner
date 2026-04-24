@@ -81,12 +81,12 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
         if G.nodes[node].get("highway") == "crossing":
             G.nodes[node]["ugv_crossing"] = True
 
-    # Roadway crossings should always be penalized, even if not tagged as crossings
+    # Identify roadway intersections for additional penalty
     for node in G.nodes():
         roadways = [
             (u, v, key)
             for u, v, key, data in G.edges(node, keys=True, data=True)
-            if not data.get("ugv_sidewalk", False)
+            if not data.get("ugv_roadway_intersection", False)
         ]
         if len(roadways) > 2:
-            G.nodes[node]["ugv_crossing"] = True
+            G.nodes[node]["ugv_roadway_intersection"] = True
