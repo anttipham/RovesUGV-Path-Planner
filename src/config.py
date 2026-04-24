@@ -21,7 +21,8 @@ DRAW_LAYER_NAME = "Piirtotaso"
 BUILDING_LAYER_NAME = "Rakennukset"
 ROAD_LAYER_NAME = "Tiet"
 PATH_LAYER_NAME = "Reitti"
-CROSSING_LAYER_NAME = "Risteykset"
+CROSSING_LAYER_NAME = "Tienylitykset"
+INTERSECTION_LAYER_NAME = "Risteykset"
 RESTRICTED_ZONES_LAYER_NAME = "Rajoitetut alueet"
 
 # OSMnx constants

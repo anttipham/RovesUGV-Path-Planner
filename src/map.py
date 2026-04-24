@@ -273,6 +273,41 @@ def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
     )
 
 
+def make_intersections(G: nx.MultiDiGraph) -> folium.GeoJson:
+    """
+    Build a point layer for roadway intersections (debug visualization).
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph containing roadway intersections.
+
+    Returns
+    -------
+    folium.GeoJson
+        GeoJson layer with roadway intersection points.
+    """
+    # Display nodes in map for debugging
+    H = G.subgraph(
+        [
+            node
+            for node, intersection in G.nodes(data="ugv_intersection")
+            if intersection == True
+        ]
+    )
+    gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
+    return folium.GeoJson(
+        gdf,
+        marker=folium.CircleMarker(
+            radius=4,
+            weight=3,
+            color="black",
+            fill_color="red",
+            fill_opacity=0.7,
+        ),
+    )
+
+
 def build_map(G: nx.MultiDiGraph) -> folium.Map:
     """
     Assemble and return the full interactive Folium map.
@@ -325,18 +360,26 @@ def create_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
     """
     features = []
 
-    # Show street network and buildings
+    # Show street network
     features.append(
         folium.FeatureGroup(name=config.ROAD_LAYER_NAME).add_child(make_roads(G))
     )
+    # Show buildings
     features.append(
         folium.FeatureGroup(name=config.BUILDING_LAYER_NAME).add_child(
             make_buildings(G)
         )
     )
+    # Show crossings
     features.append(
         folium.FeatureGroup(name=config.CROSSING_LAYER_NAME).add_child(
             make_crossings(G)
+        )
+    )
+    # Show intersections
+    features.append(
+        folium.FeatureGroup(name=config.INTERSECTION_LAYER_NAME).add_child(
+            make_intersections(G)
         )
     )
 

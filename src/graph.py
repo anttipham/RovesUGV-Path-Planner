@@ -86,7 +86,7 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
         roadways = [
             (u, v, key)
             for u, v, key, data in G.edges(node, keys=True, data=True)
-            if not data.get("ugv_roadway_intersection", False)
+            if not data.get("ugv_sidewalk")
         ]
         if len(roadways) > 2:
-            G.nodes[node]["ugv_roadway_intersection"] = True
+            G.nodes[node]["ugv_intersection"] = True
