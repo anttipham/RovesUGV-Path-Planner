@@ -41,7 +41,8 @@ COST_TRAFFIC_SIGNALS = 0  # Additional cost at traffic-signal crossings
 COST_ZEBRA_CROSSING = 2  # Additional cost at zebra/marked crossings
 COST_UNCONTROLLED_CROSSING = 5  # Additional cost at uncontrolled crossings
 COST_ROADWAY_CROSSING = 30  # Penalty for exiting a crossing onto a roadway
-COST_CENTRALITY_FACTOR = 0  # Multiplier for edge centrality penalty (0 = disabled)
+COST_CENTRALITY_FACTOR = 0.0  # Multiplier for edge centrality penalty (0 = disabled)
+CENTRALITY_ITERATION_LIMIT = 10  # Max iteration limit for the backbone calculation
 
 # 2D raster pathfinding constants
 GRADUAL_OBSTACLE_COST_RADIUS = (
