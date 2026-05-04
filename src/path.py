@@ -73,6 +73,7 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
                 "y": centroid.y,
                 "x": centroid.x,
                 "ugv_building_access": True,
+                "ugv_sidewalk": True,
             }
 
         # Attach the centroid to the nearest node excluding the node itself
