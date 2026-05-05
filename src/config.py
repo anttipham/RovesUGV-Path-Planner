@@ -66,7 +66,7 @@ BBOX_SIZE = 1000  # Size (meters) of bounding box around clicked point
 BBOX_IMAGE_SIZE = 512  # Resolution (pixels) of downloaded raster tiles
 
 # Map features of Roves area
-START_LOCATION = (62.781708, 22.894071)  # in EPSG:4326
+START_LOCATION = (62.796544, 22.974043)  # in EPSG:4326
 AREA_POLYGON = shapely.Polygon(
     (
         (22.877596, 62.77948),

@@ -111,7 +111,7 @@ def main():
     # Build graph once per session
     if "graph" not in st.session_state:
         G = graph.create_road_graph()
-        graph.add_building_gdf(G)
+        # graph.add_building_gdf(G)
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
 

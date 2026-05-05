@@ -10,21 +10,20 @@ from shapely.geometry import LineString
 
 import config
 
+# def add_building_gdf(G: nx.MultiDiGraph) -> None:
+#     """
+#     Fetch building polygons from OpenStreetMap inside the configured area.
 
-def add_building_gdf(G: nx.MultiDiGraph) -> None:
-    """
-    Fetch building polygons from OpenStreetMap inside the configured area.
-
-    Notes
-    -----
-    Sets:
-    - Graph attribute: `ugv_buildings` (building GeoDataFrame with OSM tags)
-    """
-    gdf = ox.features_from_polygon(
-        config.AREA_POLYGON,
-        {"building": True},
-    )
-    G.graph["ugv_buildings"] = gdf
+#     Notes
+#     -----
+#     Sets:
+#     - Graph attribute: `ugv_buildings` (building GeoDataFrame with OSM tags)
+#     """
+#     gdf = ox.features_from_polygon(
+#         config.AREA_POLYGON,
+#         {"building": True},
+#     )
+#     G.graph["ugv_buildings"] = gdf
 
 
 def create_road_graph() -> nx.MultiDiGraph:

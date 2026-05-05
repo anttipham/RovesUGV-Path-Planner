@@ -59,7 +59,9 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
 
     # Find the nearest point to be used as access way for each building
     access_ways: dict[int, tuple[int, dict]] = {}
-    building_gdf = G.graph["ugv_buildings"]
+    building_gdf = G.graph.get("ugv_buildings")
+    if not building_gdf:
+        return
     for row in building_gdf.itertuples():
         id = row.Index[1]
 
@@ -512,7 +514,7 @@ def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
         edge for path in all_building_path_pairs.values() for edge in path
     )
 
-    G.graph["ugv_max_centrality"] = max(centralities.values())
+    G.graph["ugv_max_centrality"] = max(centralities.values()) if centralities else 0
 
     for edge in G.edges(keys=True):
         G.edges[edge]["ugv_centrality"] = centralities.get(edge, 0)
