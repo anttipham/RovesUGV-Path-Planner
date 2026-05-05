@@ -649,14 +649,7 @@ def simplify_paths(
 
 def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]) -> None:
     """
-    Compute and insert virtual premise paths from a clicked map point.
-
-    Workflow:
-    1. Download local WMS raster around click location.
-    2. Run 2D image-based routing to nearest road goals.
-    3. Simplify image-space paths.
-    4. Convert to map coordinates.
-    5. Add virtual nodes/edges to graph and connect to nearest road edges.
+    Add a virtual node at the clicked map point and connect it to the nearest edge.
 
     Parameters
     ----------
@@ -665,103 +658,24 @@ def calc_premise_path(G: nx.MultiDiGraph, coord: tuple[float, float]) -> None:
     coord : tuple[float, float]
         Map coordinate (lon, lat) in config.MAP_EPSG.
     """
-    # Download image of the premise area
-    x, y = pyproj.Transformer.from_crs(config.MAP_EPSG, config.METRIC_EPSG).transform(
-        *coord[::-1]
-    )
-    bbox = (
-        x - config.BBOX_SIZE // 2,
-        y - config.BBOX_SIZE // 2,
-        x + config.BBOX_SIZE // 2,
-        y + config.BBOX_SIZE // 2,
-    )
-    url = "http://localhost:8080/service"
-    params = {
-        "service": "WMS",
-        "request": "GetMap",
-        "layers": "seinajoki_topographic_image",
-        "styles": "",
-        "format": "image/png",
-        "transparent": "true",
-        "version": "1.1.1",
-        "width": config.BBOX_IMAGE_SIZE,
-        "height": config.BBOX_IMAGE_SIZE,
-        "srs": config.METRIC_EPSG,
-        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-    }
-    response = requests.get(url, params=params)
-    img_array = np.frombuffer(response.content, dtype=np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
-
-    # Compute paths on the premise image and add them to the map
-    paths = path_image.calc_2d_premise_paths(G, img, bbox, debug_img=True)
-
-    if not paths:
-        return
-
-    # Simplify paths
-    simplified_paths = simplify_paths(
-        [[(x, y) for y, x in path] for path in paths.values()],
-        combination_tolerance=config.SIMPLIFICATION_COMBINATION_TOLERANCE,
-        line_tolerance=config.SIMPLIFICATION_LINE_TOLERANCE,
+    # Add a node exactly at the clicked coordinate and connect it to the nearest edge.
+    clicked_node_id = max(G.nodes) + 1
+    G.add_node(
+        clicked_node_id,
+        x=coord[0],
+        y=coord[1],
     )
 
-    # Convert pixel locations back to metric coordinates
-    metric_paths = [
-        [
-            (
-                bbox[0] + (bbox[2] - bbox[0]) * (x / config.BBOX_IMAGE_SIZE),
-                bbox[3] - (bbox[3] - bbox[1]) * (y / config.BBOX_IMAGE_SIZE),
-            )
-            for x, y in path
-        ]
-        for path in simplified_paths
-    ]
-
-    # Convert back to map CRS
-    transformer = pyproj.Transformer.from_crs(
-        config.METRIC_EPSG,
-        config.MAP_EPSG,
-        always_xy=True,
+    clicked_connection_node_id = split_nearest_edge(G, coord[0], coord[1])
+    G.add_edge(
+        clicked_node_id,
+        clicked_connection_node_id,
+        ugv_sidewalk=True,
+        ugv_virtual="yes",
     )
-    map_coords: list[list[tuple[float, float]]] = [
-        [transformer.transform(x, y) for x, y in path] for path in metric_paths
-    ]
-
-    # Add last nodes of the paths as new nodes to the graph
-    last_points = [path[-1] for path in map_coords]
-    connection_node_ids = []
-    for x, y in last_points:
-        connection_node_ids.append(split_nearest_edge(G, x, y))
-
-    # Add rest of the paths
-    for i, path in enumerate(map_coords):
-        # First node of the path
-        if i == 0:
-            # First node of the first path does not need to be connected to the graph.
-            # No need to split an edge.
-            node_id = max(G.nodes) + 1
-            G.add_node(node_id, x=path[0][0], y=path[0][1])
-        else:
-            prev_node_id = split_nearest_edge(G, path[0][0], path[0][1])
-            node_id = max(G.nodes) + 1
-            G.add_node(node_id, x=path[0][0], y=path[0][1])
-            G.add_edge(prev_node_id, node_id, ugv_sidewalk=True, ugv_virtual="yes")
-            G.add_edge(node_id, prev_node_id, ugv_sidewalk=True, ugv_virtual="yes")
-        prev_node_id = node_id
-        node_id = prev_node_id + 1
-
-        # Rest of the nodes in the path
-        for x, y in path[1:]:
-            G.add_node(node_id, x=x, y=y)
-            G.add_edge(prev_node_id, node_id, ugv_sidewalk=True, ugv_virtual="yes")
-            G.add_edge(node_id, prev_node_id, ugv_sidewalk=True, ugv_virtual="yes")
-            prev_node_id = node_id
-            node_id = prev_node_id + 1
-        # Connect the end of the path to the connection node on the road graph
-        G.add_edge(
-            prev_node_id, connection_node_ids[i], ugv_sidewalk=True, ugv_virtual="yes"
-        )
-        G.add_edge(
-            connection_node_ids[i], prev_node_id, ugv_sidewalk=True, ugv_virtual="yes"
-        )
+    G.add_edge(
+        clicked_connection_node_id,
+        clicked_node_id,
+        ugv_sidewalk=True,
+        ugv_virtual="yes",
+    )

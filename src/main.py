@@ -30,6 +30,7 @@ import networkx as nx
 import pyproj
 import streamlit as st
 from streamlit_folium import st_folium
+import osmnx as ox
 
 import config
 import map

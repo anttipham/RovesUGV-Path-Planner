@@ -71,10 +71,11 @@ def create_road_graph() -> nx.MultiDiGraph:
         # Round to stabilize floating point coordinates used as node keys.
         key = (round(x, 9), round(y, 9))
         if key not in coord_to_node:
-            coord_to_node[key] = next_node_id
-            G.add_node(next_node_id, x=x, y=y)
+            node_id = int(next_node_id)
+            coord_to_node[key] = node_id
+            G.add_node(node_id, x=x, y=y)
             next_node_id += 1
-        return coord_to_node[key]
+        return int(coord_to_node[key])
 
     for row in gdf.itertuples(index=False):
         geom = row.geometry
@@ -91,14 +92,12 @@ def create_road_graph() -> nx.MultiDiGraph:
             if u == v:
                 continue
 
-            segment = LineString([(x1, y1), (x2, y2)])
             mx1, my1 = to_metric.transform(x1, y1)
             mx2, my2 = to_metric.transform(x2, y2)
             length = LineString([(mx1, my1), (mx2, my2)]).length
 
             attrs = {
                 **edge_attrs,
-                "geometry": segment,
                 "length": length,
             }
             # Build a bidirectional street graph for routing.
