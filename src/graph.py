@@ -5,6 +5,8 @@ Graph data access and graph preprocessing utilities.
 import geopandas as gpd
 import networkx as nx
 import osmnx as ox
+import pyproj
+from shapely.geometry import LineString
 
 import config
 
@@ -27,19 +29,83 @@ def add_building_gdf(G: nx.MultiDiGraph) -> None:
 
 def create_road_graph() -> nx.MultiDiGraph:
     """
-    Create an unsimplified road graph for the configured area polygon.
+    Create an unsimplified road graph from the local warehouse GeoJSON.
 
     Returns
     -------
     nx.MultiDiGraph
-        Directed multigraph containing OSM road/path network edges and nodes.
+        Directed multigraph containing road/path network edges and nodes.
     """
-    G = ox.graph.graph_from_polygon(
-        config.AREA_POLYGON,
-        network_type="all",
-        truncate_by_edge=True,
-        simplify=False,
+    gdf = gpd.read_file(config.WAREHOUSE_NETWORK_GEOJSON_PATH)
+    if gdf.empty:
+        raise ValueError(
+            f"No features found in {config.WAREHOUSE_NETWORK_GEOJSON_PATH}."
+        )
+
+    if gdf.crs is None:
+        gdf = gdf.set_crs(config.MAP_EPSG)
+    else:
+        gdf = gdf.to_crs(config.MAP_EPSG)
+
+    gdf = gdf[gdf.geometry.type.isin(["LineString", "MultiLineString"])].explode(
+        index_parts=False
     )
+    if gdf.empty:
+        raise ValueError(
+            "Warehouse network GeoJSON does not contain LineString geometries."
+        )
+
+    G = nx.MultiDiGraph()
+    G.graph["crs"] = config.MAP_EPSG
+
+    to_metric = pyproj.Transformer.from_crs(
+        config.MAP_EPSG,
+        config.METRIC_EPSG,
+        always_xy=True,
+    )
+
+    coord_to_node: dict[tuple[float, float], int] = {}
+    next_node_id = 0
+
+    def get_or_create_node_id(x: float, y: float) -> int:
+        nonlocal next_node_id
+        # Round to stabilize floating point coordinates used as node keys.
+        key = (round(x, 9), round(y, 9))
+        if key not in coord_to_node:
+            coord_to_node[key] = next_node_id
+            G.add_node(next_node_id, x=x, y=y)
+            next_node_id += 1
+        return coord_to_node[key]
+
+    for row in gdf.itertuples(index=False):
+        geom = row.geometry
+        coords = list(geom.coords)
+        if len(coords) < 2:
+            continue
+
+        edge_attrs = row._asdict()
+        edge_attrs.pop("geometry", None)
+
+        for (x1, y1), (x2, y2) in zip(coords[:-1], coords[1:]):
+            u = get_or_create_node_id(float(x1), float(y1))
+            v = get_or_create_node_id(float(x2), float(y2))
+            if u == v:
+                continue
+
+            segment = LineString([(x1, y1), (x2, y2)])
+            mx1, my1 = to_metric.transform(x1, y1)
+            mx2, my2 = to_metric.transform(x2, y2)
+            length = LineString([(mx1, my1), (mx2, my2)]).length
+
+            attrs = {
+                **edge_attrs,
+                "geometry": segment,
+                "length": length,
+            }
+            # Build a bidirectional street graph for routing.
+            G.add_edge(u, v, **attrs)
+            G.add_edge(v, u, **attrs)
+
     return G
 
 

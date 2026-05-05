@@ -7,9 +7,15 @@ and 2D raster pathfinding settings used throughout the application.
 
 import osmnx as ox
 import shapely
+from pathlib import Path
 
 # Streamlit constants
 APP_TITLE = "RovesUGV Path Planner"
+
+# Local data files
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WAREHOUSE_NETWORK_GEOJSON_PATH = PROJECT_ROOT / "data" / "warehousenetwork.geojson"
+MLE_LAYOUT_TIF_PATH = PROJECT_ROOT / "data" / "mle_layout_canvasedit.tif"
 
 # Tile names
 OPEN_STREET_MAP_LAYER_NAME = "OpenStreetMap"

@@ -11,8 +11,11 @@ import folium
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import osmnx as ox
+import rasterio
 from folium.plugins import Draw
+from rasterio.warp import transform_bounds
 
 import config
 import graph
@@ -22,6 +25,10 @@ LEAFLET_STYLING = """
     <style>
     .leaflet-div-icon.leaflet-editing-icon {
         border-radius: 50%;
+    }
+    .leaflet-container {
+        background: #000;
+        outline: 0;
     }
     </style>
 """
@@ -91,74 +98,62 @@ def add_draw_plugin(m: folium.Map) -> None:
 
 def _add_tile_layers(m: folium.Map) -> None:
     """
-    Add base and overlay WMS tile layers to the map.
-
-    Includes OpenStreetMap, satellite imagery, and topographic layers from MapProxy.
+    Add the local `mle_layout.tif` raster as the map background.
 
     Parameters
     ----------
     m : folium.Map
         Map object to add tile layers to.
     """
-    # OpenStreetMap
-    folium.WmsTileLayer(
-        url="http://localhost:8080/service",
-        layers="osm",
-        transparent=False,
-        fmt="image/png",
-        name=config.OPEN_STREET_MAP_LAYER_NAME,
-        overlay=False,
-        show=False,
-    ).add_to(m)
+    with rasterio.open(config.MLE_LAYOUT_TIF_PATH) as src:
+        raster_data = src.read()
+        bounds = src.bounds
+        src_crs = src.crs
 
-    # Seinäjoki satellite image
-    folium.WmsTileLayer(
-        url="http://localhost:8080/service",
-        layers="seinajoki_satellite_image",
-        transparent=False,
-        fmt="image/png",
-        name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
-        overlay=False,
+    def to_uint8(channel: np.ndarray) -> np.ndarray:
+        if channel.dtype == np.uint8:
+            return channel
+        channel = channel.astype(np.float32)
+        min_val = float(np.nanmin(channel))
+        max_val = float(np.nanmax(channel))
+        if max_val <= min_val:
+            return np.zeros(channel.shape, dtype=np.uint8)
+        scaled = (channel - min_val) / (max_val - min_val)
+        return (scaled * 255).astype(np.uint8)
+
+    if raster_data.shape[0] >= 3:
+        image = np.dstack(
+            [
+                to_uint8(raster_data[0]),
+                to_uint8(raster_data[1]),
+                to_uint8(raster_data[2]),
+            ]
+        )
+    else:
+        gray = to_uint8(raster_data[0])
+        image = np.dstack([gray, gray, gray])
+
+    west, south, east, north = bounds.left, bounds.bottom, bounds.right, bounds.top
+    if src_crs and str(src_crs) != config.MAP_EPSG:
+        west, south, east, north = transform_bounds(
+            src_crs,
+            config.MAP_EPSG,
+            west,
+            south,
+            east,
+            north,
+        )
+
+    folium.raster_layers.ImageOverlay(
+        image=image,
+        bounds=[[south, west], [north, east]],
+        name="MLE Layout",
+        opacity=1.0,
+        interactive=False,
+        cross_origin=False,
+        zindex=1,
         show=True,
     ).add_to(m)
-
-    # Seinäjoki topographic map
-    folium.WmsTileLayer(
-        url="http://localhost:8080/service",
-        layers="seinajoki_topographic_image",
-        transparent=True,
-        fmt="image/png",
-        name=config.SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME,
-        overlay=True,
-        show=True,
-    ).add_to(m)
-
-    # Debug: Fall back to uncached versions of the WMS layers when the MapProxy is down.
-    # folium.TileLayer(
-    #     tiles="openstreetmap", name=config.OPEN_STREET_MAP_LAYER_NAME
-    # ).add_to(m)
-
-    # # Add Seinäjoki satellite image WMS layer
-    # folium.WmsTileLayer(
-    #     url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
-    #     layers="Hybridi-ilmakuva",
-    #     transparent=True,
-    #     fmt="image/png",
-    #     name=config.SEINAJOKI_SATELLITE_IMAGE_LAYER_NAME,
-    #     overlay=False,
-    #     show=True,
-    # ).add_to(m)
-
-    # # Add Seinäjoki topographic map WMS layer
-    # folium.WmsTileLayer(
-    #     url="https://kartat.seinajoki.fi/teklaogcweb/wms.ashx",
-    #     layers="KantakartanMaastotiedot",
-    #     transparent=True,
-    #     fmt="image/png",
-    #     name=config.SEINAJOKI_TOPOGRAPHIC_IMAGE_LAYER_NAME,
-    #     overlay=True,
-    #     show=True,
-    # ).add_to(m)
 
 
 def make_buildings(G: nx.MultiDiGraph) -> folium.GeoJson:
@@ -264,6 +259,10 @@ def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
     H = G.subgraph(
         [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
     )
+    if H.number_of_nodes() == 0:
+        # Return an empty layer if there are no crossings to display
+        return folium.GeoJson(gpd.GeoDataFrame(geometry=[], crs=config.MAP_EPSG))
+
     gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
     return folium.GeoJson(
         gdf,
@@ -295,6 +294,10 @@ def make_intersections(G: nx.MultiDiGraph) -> folium.GeoJson:
             if intersection == True
         ]
     )
+    if H.number_of_nodes() == 0:
+        # Return an empty layer if there are no intersections to display
+        return folium.GeoJson(gpd.GeoDataFrame(geometry=[], crs=config.MAP_EPSG))
+
     gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
     return folium.GeoJson(
         gdf,
