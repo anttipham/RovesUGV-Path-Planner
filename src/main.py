@@ -168,6 +168,7 @@ def main():
         feature_group_to_add=map_interaction_features,
         on_change=handle_map_click,
         layer_control=folium.LayerControl(),
+        height=1300,
     )
 
     # Debug output: selected route and per-edge costs
