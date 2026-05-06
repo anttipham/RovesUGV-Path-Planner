@@ -359,7 +359,7 @@ def build_map(G: nx.MultiDiGraph) -> folium.Map:
     return m
 
 
-def create_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
+def make_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
     """
     Build a Folium layer showing all features
 
@@ -398,36 +398,6 @@ def create_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
         )
     )
 
-    # Show chosen buildings and the path between them
-    building_path = folium.FeatureGroup(name=config.PATH_LAYER_NAME, control=True)
-    ids = path.get_chosen_building_nodes(G)
-    buildings = G.graph.get("ugv_buildings")
-    if buildings:
-        chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids)]
-        folium.GeoJson(
-            chosen_buildings,
-            style_function=lambda _: {
-                "fillColor": "#0095FF",
-                "color": "black",
-                "weight": 3,
-                "fillOpacity": 0.4,
-            },
-        ).add_to(building_path)
-        # Path requires a (1) source and (2) target node
-        if len(ids) >= 2:
-            # Show shortest path between buildings
-            edges = G.graph["ugv_all_building_path_pairs"].get((ids[0], ids[1]), [])
-            path_graph = G.edge_subgraph(edges)
-            folium.GeoJson(
-                ox.graph_to_gdfs(path_graph, nodes=False),
-                style_function=lambda _: {
-                    "color": "#007AD1",
-                    "weight": 4,
-                    "opacity": 1,
-                },
-            ).add_to(building_path)
-        features.append(building_path)
-
     # Show user-drawn restricted zones
     restricted_zone_layer = folium.FeatureGroup(name=config.RESTRICTED_ZONES_LAYER_NAME)
     for metric_zone in G.graph["ugv_restricted_zones_metric"]:
@@ -448,3 +418,52 @@ def create_features(G: nx.MultiDiGraph) -> list[folium.FeatureGroup]:
     features.append(restricted_zone_layer)
 
     return features
+
+
+def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
+    """
+    Build a feature group showing the path between the last 2 buildings in the list.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph with computed paths and chosen buildings.
+    ids : list[int]
+        List of node IDs for the buildings.
+
+    Returns
+    -------
+    folium.FeatureGroup
+        Feature group containing the path between the two buildings.
+    """
+    # Show the last 2 buildings in the list and the path between them
+    building_path = folium.FeatureGroup(name=config.PATH_LAYER_NAME, control=True)
+    ids2 = ids[-2:]
+    buildings = G.graph.get("ugv_buildings")
+    if buildings:
+        chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids2)]
+        folium.GeoJson(
+            chosen_buildings,
+            style_function=lambda _: {
+                "fillColor": "#0095FF",
+                "color": "black",
+                "weight": 3,
+                "fillOpacity": 0.4,
+            },
+        ).add_to(building_path)
+
+    # Path requires a (1) source and (2) target node
+    if len(ids2) >= 2:
+        # Show shortest path between buildings
+        edges = G.graph["ugv_all_building_path_pairs"].get((ids2[0], ids2[1]), [])
+        path_graph = G.edge_subgraph(edges)
+        folium.GeoJson(
+            ox.graph_to_gdfs(path_graph, nodes=False),
+            style_function=lambda _: {
+                "color": "#007AD1",
+                "weight": 4,
+                "opacity": 1,
+            },
+        ).add_to(building_path)
+
+    return building_path

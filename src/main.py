@@ -43,12 +43,16 @@ def handle_map_click():
     """
     Process the latest map interaction event from Streamlit session state.
 
-    Handles two types of interactions:
+    Handles the following interactions:
 
     1. **Building polygon click** (Polygon geometry with id):
-       - Marks building as selected by updating `chosen_time` node attribute.
+       - Marks building as selected by updating `st.session_state["selected_buildings"]`.
 
-    2. **Point marker placement** (Point geometry):
+    2. **Exclusion zone drawing** (Polygon geometry without id):
+       - Converts drawn polygon to metric CRS and adds it to `ugv_restricted_zones_metric`.
+       - Sets `update_graph` flag to refresh centrality and path pairs.
+
+    3. **Point marker placement** (Point geometry):
        - Triggers computation of virtual premise paths from raster imagery.
        - Sets `update_graph` flag to refresh centrality and path pairs.
     """
@@ -60,12 +64,12 @@ def handle_map_click():
         return
 
     if clicked_object["geometry"]["type"] == "Polygon":
-        # Click building
+        # 1. Select building
         if "id" in clicked_object:
             id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
-            G.nodes[id]["chosen_time"] = time.time()
+            st.session_state["selected_buildings"].append(id)
+        # 2. Add exclusion zone
         else:
-            # Add restricted zone in metric CRS
             transformer = pyproj.Transformer.from_crs(
                 config.MAP_EPSG,
                 config.METRIC_EPSG,
@@ -79,7 +83,7 @@ def handle_map_click():
             G.graph["ugv_restricted_zones_metric"].append(restricted_zone)
             st.session_state["update_graph"] = True
 
-    # A marker is placed
+    # 3. A marker is placed
     if clicked_object["geometry"]["type"] == "Point":
         path.calc_premise_path(
             st.session_state["graph"], clicked_object["geometry"]["coordinates"]
@@ -109,12 +113,13 @@ def main():
     )
     st.title(f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}")
 
-    # Build graph once per session
+    # Initialize session states
     if "graph" not in st.session_state:
         G = graph.create_road_graph()
         # graph.add_building_gdf(G)
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
+        st.session_state["selected_buildings"] = []
 
     # Refresh derived graph data when requested
     if st.session_state["update_graph"]:
@@ -149,7 +154,10 @@ def main():
     m = map.build_map(G)
 
     # Dynamically changing map features
-    map_interaction_features = map.create_features(G)
+    map_interaction_features = map.make_features(G)
+    map_interaction_features.append(
+        map.make_path(G, st.session_state["selected_buildings"][-2:])
+    )
 
     # Display the map in Streamlit and capture interaction data
     st_data = st_folium(
@@ -163,7 +171,7 @@ def main():
     )
 
     # Debug output: selected route and per-edge costs
-    ids = path.get_chosen_building_nodes(G)
+    ids = st.session_state["selected_buildings"][-2:]
     if len(ids) == 2:
         source, target = ids[0], ids[1]
         path_data = G.graph["ugv_all_building_path_pairs"].get((source, target))
