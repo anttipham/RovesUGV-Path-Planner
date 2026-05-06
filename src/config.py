@@ -14,7 +14,8 @@ APP_TITLE = "RovesUGV Path Planner"
 
 # Local data files
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WAREHOUSE_NETWORK_GEOJSON_PATH = PROJECT_ROOT / "data" / "warehousenetwork.geojson"
+WAREHOUSE_NETWORK_GEOJSON_PATH = PROJECT_ROOT / "data" / "warehousenetwork.graphml"
+RACKS_GEOJSON_PATH = PROJECT_ROOT / "data" / "racks.geojson"
 MLE_LAYOUT_TIF_PATH = PROJECT_ROOT / "data" / "mle_layout_canvasedit.tif"
 
 # Tile names

@@ -199,8 +199,8 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     """
     color_map = plt.get_cmap("Reds")
     max_log_centrality = (
-        math.log2(G.graph["ugv_max_centrality"])
-        if G.graph["ugv_max_centrality"] > 0
+        math.log2(G.graph.get("ugv_max_centrality", 0))
+        if G.graph.get("ugv_max_centrality", 0) > 0
         else 0
     )
 
@@ -220,7 +220,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     )
 
     def style(feature):
-        centrality = feature["properties"]["ugv_centrality"]
+        centrality = feature["properties"].get("ugv_centrality", 0)
 
         if centrality <= building_access_num:
             # Use min centrality as the lower range
@@ -233,7 +233,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
         log_centrality_normalized = (
             (log_centrality - min_log_centrality)
             / (max_log_centrality - min_log_centrality)
-            if max_log_centrality > min_log_centrality
+            if max_log_centrality > 0 and max_log_centrality > min_log_centrality
             else 0
         )
 
@@ -440,20 +440,20 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
     building_path = folium.FeatureGroup(name=config.PATH_LAYER_NAME, control=True)
     ids2 = ids[-2:]
     buildings = G.graph.get("ugv_buildings")
-    if buildings:
-        chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids2)]
+    if buildings is not None:
+        chosen_buildings = buildings[buildings.id.isin(ids2)]
         folium.GeoJson(
             chosen_buildings,
             style_function=lambda _: {
                 "fillColor": "#0095FF",
                 "color": "black",
                 "weight": 3,
-                "fillOpacity": 0.4,
+                "fillOpacity": 1,
             },
         ).add_to(building_path)
 
     # Path requires a (1) source and (2) target node
-    if len(ids2) >= 2:
+    if len(ids2) >= 2 and "ugv_all_building_path_pairs" in G.graph:
         # Show shortest path between buildings
         edges = G.graph["ugv_all_building_path_pairs"].get((ids2[0], ids2[1]), [])
         path_graph = G.edge_subgraph(edges)

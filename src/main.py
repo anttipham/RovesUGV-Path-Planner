@@ -66,7 +66,7 @@ def handle_map_click():
     if clicked_object["geometry"]["type"] == "Polygon":
         # 1. Select building
         if "id" in clicked_object:
-            id = int(clicked_object["id"].lstrip("('way', ").rstrip(")"))
+            id = int(clicked_object["id"])
             st.session_state["selected_buildings"].append(id)
         # 2. Add exclusion zone
         else:
@@ -116,7 +116,7 @@ def main():
     # Initialize session states
     if "graph" not in st.session_state:
         G = graph.create_road_graph()
-        # graph.add_building_gdf(G)
+        graph.add_building_gdf(G)
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
         st.session_state["selected_buildings"] = []
@@ -128,27 +128,29 @@ def main():
         path.update_building_access(G)
         graph.add_custom_attributes(G)
 
-        if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
-            path.add_all_building_path_pairs(G)
-            path.add_betweenness_centrality(G)
-        else:
-            old_centrality = G.graph.get("ugv_max_centrality", 0)
-            for i in range(config.CENTRALITY_ITERATION_LIMIT):
-                # Recalculate paths and centrality until convergence (max centrality
-                # no longer changes between iterations)
-                if old_centrality == G.graph.get("ugv_max_centrality"):
-                    break
-                old_centrality = G.graph.get("ugv_max_centrality", 0)
-                path.add_all_building_path_pairs(G)
-                path.add_betweenness_centrality(G)
-                print(
-                    f"Centrality iteration {i+1}, "
-                    f"max centrality: {G.graph['ugv_max_centrality']}"
-                )
+        # if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
+        #     path.add_all_building_path_pairs(G)
+        #     path.add_betweenness_centrality(G)
+        # else:
+        #     old_centrality = G.graph.get("ugv_max_centrality", 0)
+        #     for i in range(config.CENTRALITY_ITERATION_LIMIT):
+        #         # Recalculate paths and centrality until convergence (max centrality
+        #         # no longer changes between iterations)
+        #         if old_centrality == G.graph.get("ugv_max_centrality"):
+        #             break
+        #         old_centrality = G.graph.get("ugv_max_centrality", 0)
+        #         path.add_all_building_path_pairs(G)
+        #         path.add_betweenness_centrality(G)
+        #         print(
+        #             f"Centrality iteration {i+1}, "
+        #             f"max centrality: {G.graph['ugv_max_centrality']}"
+        #         )
 
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]
+
+    # ox.save_graph_geopackage(G, config.PROJECT_ROOT / "data" / "ugv_graph.gpkg", encoding="utf-8")
 
     # Load and build the map
     m = map.build_map(G)
@@ -173,7 +175,7 @@ def main():
 
     # Debug output: selected route and per-edge costs
     ids = st.session_state["selected_buildings"][-2:]
-    if len(ids) == 2:
+    if len(ids) == 2 and "ugv_all_building_path_pairs" in G.graph:
         source, target = ids[0], ids[1]
         path_data = G.graph["ugv_all_building_path_pairs"].get((source, target))
 

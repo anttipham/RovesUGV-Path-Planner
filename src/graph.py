@@ -10,20 +10,30 @@ from shapely.geometry import LineString
 
 import config
 
-# def add_building_gdf(G: nx.MultiDiGraph) -> None:
-#     """
-#     Fetch building polygons from OpenStreetMap inside the configured area.
 
-#     Notes
-#     -----
-#     Sets:
-#     - Graph attribute: `ugv_buildings` (building GeoDataFrame with OSM tags)
-#     """
-#     gdf = ox.features_from_polygon(
-#         config.AREA_POLYGON,
-#         {"building": True},
-#     )
-#     G.graph["ugv_buildings"] = gdf
+def add_building_gdf(G: nx.MultiDiGraph) -> None:
+    """
+    Load building/rack geometries from a local GeoJSON file.
+
+    Notes
+    -----
+    Sets:
+    - Graph attribute: `ugv_buildings` (GeoDataFrame from local data file)
+    """
+    gdf = gpd.read_file(config.RACKS_GEOJSON_PATH)
+    if gdf.empty:
+        raise ValueError(f"No features found in {config.RACKS_GEOJSON_PATH}.")
+
+    if gdf.crs is None:
+        gdf = gdf.set_crs(config.MAP_EPSG)
+    else:
+        gdf = gdf.to_crs(config.MAP_EPSG)
+
+    # Keep GeoJSON feature ids aligned with building ids for click handling.
+    if "id" in gdf.columns:
+        gdf = gdf.set_index("id", drop=False)
+
+    G.graph["ugv_buildings"] = gdf
 
 
 def create_road_graph() -> nx.MultiDiGraph:
@@ -128,7 +138,9 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
 
     # Initialize graph attribute for user-drawn restricted zones
     if "ugv_restricted_zones_metric" not in G.graph:
-        G.graph["ugv_restricted_zones_metric"] = []
+        G.graph["ugv_restricted_zones_metric"] = G.graph.get(
+            "ugv_restricted_zones_metric", []
+        )
 
     # Mark sidewalk-eligible edges for UGV routing
     for u, v, key, data in G.edges(keys=True, data=True):

@@ -57,13 +57,14 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
     }
     G.remove_nodes_from(existing_access_nodes.keys())
 
-    # Find the nearest point to be used as access way for each building
+    # Find the nearest edge to be used as access way for each building
     access_ways: dict[int, tuple[int, dict]] = {}
     building_gdf = G.graph.get("ugv_buildings")
-    if not building_gdf:
+    if building_gdf is None:
         return
     for row in building_gdf.itertuples():
-        id = row.Index[1]
+        id = row.id
+        print(f"Processing building {id}")
 
         # Find the building node by id
         if id in existing_access_nodes:
