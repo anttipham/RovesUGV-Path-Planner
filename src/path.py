@@ -342,25 +342,6 @@ def dijkstra_to_targets_edges(
     return reachable_distances, reachable_edge_paths
 
 
-def get_chosen_building_nodes(G: nx.MultiDiGraph) -> list[int]:
-    """
-    Return up to two most recently selected building node ids.
-
-    Returns
-    -------
-    list[int]
-        Building node ids, sorted by selection time (oldest first).
-    """
-    all_chosen_buildings = [
-        (chosen_time, node)
-        for node, chosen_time in G.nodes(data="chosen_time")
-        if chosen_time
-    ]
-    all_chosen_buildings.sort()
-    chosen_buildings = [node for _, node in all_chosen_buildings[-2:]]
-    return chosen_buildings
-
-
 def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float:
     """
     Calculate the routing cost of traversing an edge in the graph.
