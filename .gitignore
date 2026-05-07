@@ -3,6 +3,5 @@ cache_data
 examples
 **/__pycache__
 *.pyc
-**/*.graphml
 **/*.png
 .vscode
