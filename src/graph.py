@@ -36,6 +36,19 @@ def add_building_gdf(G: nx.MultiDiGraph) -> None:
     G.graph["ugv_buildings"] = gdf
 
 
+def load_road_graph() -> nx.MultiDiGraph:
+    """
+    Load a pre-built road graph from a GraphML file.
+
+    Returns
+    -------
+    nx.MultiDiGraph
+        Directed multigraph loaded from the GraphML file.
+    """
+    G = ox.load_graphml(config.WAREHOUSE_NETWORK_GRAPHML_PATH)
+    add_building_gdf(G)
+    return G
+
 def create_road_graph() -> nx.MultiDiGraph:
     """
     Create an unsimplified road graph from the local warehouse GeoJSON.
@@ -45,7 +58,9 @@ def create_road_graph() -> nx.MultiDiGraph:
     nx.MultiDiGraph
         Directed multigraph containing road/path network edges and nodes.
     """
-    gdf = gpd.read_file(config.WAREHOUSE_NETWORK_GEOJSON_PATH)
+    gdf = gpd.read_file(config.WAREHOUSE_NETWORK_GEOJSON_PATH, on_invalid="ignore")
+    # Drop rows where geometry failed to parse or is otherwise null/invalid
+    gdf = gdf[gdf.geometry.notna() & gdf.geometry.is_valid]
     if gdf.empty:
         raise ValueError(
             f"No features found in {config.WAREHOUSE_NETWORK_GEOJSON_PATH}."
@@ -74,7 +89,12 @@ def create_road_graph() -> nx.MultiDiGraph:
     )
 
     coord_to_node: dict[tuple[float, float], int] = {}
-    next_node_id = 0
+
+    # Start road node IDs after the max building ID to avoid collisions with
+    # building access nodes that use the rack feature IDs as graph node IDs.
+    add_building_gdf(G)
+    building_ids = G.graph["ugv_buildings"]["id"]
+    next_node_id = (int(building_ids.max()) + 1) if not building_ids.empty else 0
 
     def get_or_create_node_id(x: float, y: float) -> int:
         nonlocal next_node_id
@@ -93,26 +113,17 @@ def create_road_graph() -> nx.MultiDiGraph:
         if len(coords) < 2:
             continue
 
-        edge_attrs = row._asdict()
-        edge_attrs.pop("geometry", None)
-
         for (x1, y1), (x2, y2) in zip(coords[:-1], coords[1:]):
             u = get_or_create_node_id(float(x1), float(y1))
             v = get_or_create_node_id(float(x2), float(y2))
             if u == v:
                 continue
 
-            mx1, my1 = to_metric.transform(x1, y1)
-            mx2, my2 = to_metric.transform(x2, y2)
-            length = LineString([(mx1, my1), (mx2, my2)]).length
-
-            attrs = {
-                **edge_attrs,
-                "length": length,
-            }
             # Build a bidirectional street graph for routing.
-            G.add_edge(u, v, **attrs)
-            G.add_edge(v, u, **attrs)
+            if not G.has_edge(u, v):
+                G.add_edge(u, v, foot="designated")
+            if not G.has_edge(v, u):
+                G.add_edge(v, u, foot="designated")
 
     return G
 
@@ -137,10 +148,8 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
     ox.distance.add_edge_lengths(G)
 
     # Initialize graph attribute for user-drawn restricted zones
-    if "ugv_restricted_zones_metric" not in G.graph:
-        G.graph["ugv_restricted_zones_metric"] = G.graph.get(
-            "ugv_restricted_zones_metric", []
-        )
+    if "ugv_restricted_zones_metric" not in G.graph or not isinstance(G.graph["ugv_restricted_zones_metric"], list):
+        G.graph["ugv_restricted_zones_metric"] = []
 
     # Mark sidewalk-eligible edges for UGV routing
     for u, v, key, data in G.edges(keys=True, data=True):

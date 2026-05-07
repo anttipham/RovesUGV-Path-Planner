@@ -45,17 +45,9 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
     edges_to_remove = [
         (u, v, k)
         for u, v, k, data in G.edges(keys=True, data=True)
-        if data.get("ugv_closest_node_connection") is True
+        if data.get("ugv_closest_node_connection")
     ]
     G.remove_edges_from(edges_to_remove)
-
-    # Store existing building access nodes and remove them from the graph
-    existing_access_nodes = {
-        node: data
-        for node, data in G.nodes(data=True)
-        if data.get("ugv_building_access") is True
-    }
-    G.remove_nodes_from(existing_access_nodes.keys())
 
     # Find the nearest edge to be used as access way for each building
     access_ways: dict[int, tuple[int, dict]] = {}
@@ -64,24 +56,30 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
         return
     for row in building_gdf.itertuples():
         id = row.id
+
+        # Reuse as-is if the access node is already connected (e.g. user-drawn edges).
+        if id in G.nodes() and G.edges(id):
+            continue
         print(f"Processing building {id}")
 
-        # Find the building node by id
-        if id in existing_access_nodes:
-            node = existing_access_nodes[id]
+        if id in G.nodes():
+            # If the building already has a node in the graph, use it as the access node.
+            # Copy attributes before removal — G.nodes[id] is a live view that empties on remove.
+            node_data = dict(G.nodes[id])
+            G.remove_node(id)
         else:
             # If it doesn't exist, add the centroid of a building as a node to the graph
             centroid = shapely.centroid(row.geometry)
-            node = {
+            node_data = {
                 "y": centroid.y,
                 "x": centroid.x,
                 "ugv_building_access": True,
-                "ugv_sidewalk": True,
             }
 
-        # Attach the centroid to the nearest node excluding the node itself
-        nearest_node = ox.distance.nearest_nodes(G, node["x"], node["y"])
-        access_ways[id] = (nearest_node, node)
+        # Attach the node to the nearest node excluding the node itself
+        nearest_node = ox.distance.nearest_nodes(G, node_data["x"], node_data["y"])
+        # nearest_node = split_nearest_edge(G, node["x"], node["y"], max(building_gdf.id.tolist()))
+        access_ways[id] = (nearest_node, node_data)
 
     # Add the access ways to the graph
     for node1, (node2, node_data) in access_ways.items():
@@ -558,8 +556,9 @@ def split_nearest_edge(G: nx.MultiDiGraph, x: float, y: float) -> int:
     G.add_node(new_node_id, x=split_x, y=split_y)
 
     # Remove original edge
+    # NOTE: Does not support multiple parallel edges!
     original_attrs = dict(G.edges[u, v, key])
-    G.remove_edge(u, v, key)
+    G.remove_edges_from([(u, v), (v, u)])
 
     # Add split edges
     base_attrs = {k: v for k, v in original_attrs.items() if k != "length"}

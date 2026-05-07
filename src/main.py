@@ -115,8 +115,7 @@ def main():
 
     # Initialize session states
     if "graph" not in st.session_state:
-        G = graph.create_road_graph()
-        graph.add_building_gdf(G)
+        G = graph.load_road_graph()
         st.session_state["graph"] = G
         st.session_state["update_graph"] = True
         st.session_state["selected_buildings"] = []
@@ -149,8 +148,6 @@ def main():
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]
-
-    # ox.save_graph_geopackage(G, config.PROJECT_ROOT / "data" / "ugv_graph.gpkg", encoding="utf-8")
 
     # Load and build the map
     m = map.build_map(G)
