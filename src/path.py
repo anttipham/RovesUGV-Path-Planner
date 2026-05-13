@@ -435,9 +435,11 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
     return penalty
 
 
-def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
+def add_all_building_path_pairs(
+    G: nx.MultiDiGraph, source_nodes: set[int] | None = None
+) -> None:
     """
-    Compute shortest edge paths between all building-access node pairs.
+    Compute shortest edge paths between building-access node pairs.
 
     Uses Dijkstra's algorithm with custom cost function. Results are stored
     in the graph's `all_building_path_pairs` attribute.
@@ -446,6 +448,10 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
     ----------
     G : nx.MultiDiGraph
         Graph with building-access nodes (ugv_building_access=True).
+    source_nodes : set[int] | None
+        If provided, only compute paths starting from these building nodes.
+        Paths are still computed to all building-access nodes as targets.
+        If None, all building-access nodes are used as sources.
 
     Notes
     -----
@@ -458,8 +464,10 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
         if is_ugv_building_access
     )
 
+    sources = chosen_buildings & source_nodes if source_nodes is not None else chosen_buildings
+
     all_building_path_pairs: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
-    for source in chosen_buildings:
+    for source in sources:
         distances, paths = dijkstra_to_targets_edges(
             G, source, chosen_buildings, calculate_cost
         )

@@ -39,6 +39,12 @@ import path
 import shapely
 
 
+areas = [
+    [[22.95456,62.804469],[22.954474,62.799374],[22.954882,62.799427],[22.954882,62.804542],[22.95456,62.804469]],
+    [[22.993263,62.804385],[22.993231,62.799369],[22.992876,62.799344],[22.992608,62.804493],[22.993263,62.804385]]
+]
+
+
 def handle_map_click():
     """
     Process the latest map interaction event from Streamlit session state.
@@ -127,9 +133,21 @@ def main():
         path.update_building_access(G)
         graph.add_custom_attributes(G)
 
-        # if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
-        #     path.add_all_building_path_pairs(G)
-        #     path.add_betweenness_centrality(G)
+        if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
+            # Find buildings overlapping the defined areas and use them as path sources
+            area_union = shapely.unary_union(
+                [shapely.Polygon(coords) for coords in areas]
+            )
+            building_gdf = G.graph.get("ugv_buildings")
+            if building_gdf is not None:
+                source_building_ids = set(
+                    building_gdf.loc[building_gdf.geometry.intersects(area_union), "id"]
+                )
+            else:
+                source_building_ids = None
+
+            path.add_all_building_path_pairs(G, source_nodes=source_building_ids)
+            path.add_betweenness_centrality(G)
         # else:
         #     old_centrality = G.graph.get("ugv_max_centrality", 0)
         #     for i in range(config.CENTRALITY_ITERATION_LIMIT):
