@@ -24,7 +24,6 @@ A Streamlit + OSMnx application for planning UGV routes in Seinäjoki.
 ## Prerequisites
 
 - Python 3.12 (Might also work with other versions as well)
-- MapProxy
 - Internet access for maps and OSM (OpenStreetMap) downloads
 
 ## Installation
@@ -32,13 +31,21 @@ A Streamlit + OSMnx application for planning UGV routes in Seinäjoki.
 1. Clone the repository
 2. Install dependencies
 
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+If there are issues with installation, consider setting up a virtual environment:
+
 ```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Running the Application
+## Running the Application in Development
 
-Start MapProxy:
+Start MapProxy (requirements.txt installs MapProxy):
 
 ```bash
 mapproxy-util serve-develop ./mapproxy.yaml

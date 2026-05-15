@@ -6,3 +6,4 @@ examples
 **/*.graphml
 **/*.png
 .vscode
+.venv
