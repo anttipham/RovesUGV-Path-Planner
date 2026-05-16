@@ -22,6 +22,11 @@ def add_building_gdf(G: nx.MultiDiGraph) -> None:
         config.AREA_POLYGON,
         {"building": True},
     )
+
+    # Keep GeoJSON feature ids aligned with building ids for click handling.
+    if "id" in gdf.columns:
+        gdf = gdf.set_index("id", drop=False)
+
     G.graph["ugv_buildings"] = gdf
 
 
@@ -63,7 +68,9 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
     ox.distance.add_edge_lengths(G)
 
     # Initialize graph attribute for user-drawn restricted zones
-    if "ugv_restricted_zones_metric" not in G.graph:
+    if "ugv_restricted_zones_metric" not in G.graph or not isinstance(
+        G.graph["ugv_restricted_zones_metric"], list
+    ):
         G.graph["ugv_restricted_zones_metric"] = []
 
     # Mark sidewalk-eligible edges for UGV routing

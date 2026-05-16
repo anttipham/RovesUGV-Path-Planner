@@ -45,7 +45,7 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
     edges_to_remove = [
         (u, v, k)
         for u, v, k, data in G.edges(keys=True, data=True)
-        if data.get("ugv_closest_node_connection") is True
+        if data.get("ugv_closest_node_connection")
     ]
     G.remove_edges_from(edges_to_remove)
 
@@ -57,28 +57,29 @@ def update_building_access(G: nx.MultiDiGraph) -> None:
     }
     G.remove_nodes_from(existing_access_nodes.keys())
 
-    # Find the nearest point to be used as access way for each building
+    # Find the nearest node to be used as access way for each building
     access_ways: dict[int, tuple[int, dict]] = {}
-    building_gdf = G.graph["ugv_buildings"]
+    building_gdf = G.graph.get("ugv_buildings")
+    if building_gdf is None:
+        return
     for row in building_gdf.itertuples():
         id = row.Index[1]
 
         # Find the building node by id
         if id in existing_access_nodes:
-            node = existing_access_nodes[id]
+            node_data = existing_access_nodes[id]
         else:
             # If it doesn't exist, add the centroid of a building as a node to the graph
             centroid = shapely.centroid(row.geometry)
-            node = {
+            node_data = {
                 "y": centroid.y,
                 "x": centroid.x,
                 "ugv_building_access": True,
-                "ugv_sidewalk": True,
             }
 
-        # Attach the centroid to the nearest node excluding the node itself
-        nearest_node = ox.distance.nearest_nodes(G, node["x"], node["y"])
-        access_ways[id] = (nearest_node, node)
+        # Attach the node to the nearest node excluding the node itself
+        nearest_node = ox.distance.nearest_nodes(G, node_data["x"], node_data["y"])
+        access_ways[id] = (nearest_node, node_data)
 
     # Add the access ways to the graph
     for node1, (node2, node_data) in access_ways.items():
@@ -555,8 +556,9 @@ def split_nearest_edge(G: nx.MultiDiGraph, x: float, y: float) -> int:
     G.add_node(new_node_id, x=split_x, y=split_y)
 
     # Remove original edge
+    # NOTE: Does not support multiple parallel edges!
     original_attrs = dict(G.edges[u, v, key])
-    G.remove_edge(u, v, key)
+    G.remove_edges_from([(u, v), (v, u)])
 
     # Add split edges
     base_attrs = {k: v for k, v in original_attrs.items() if k != "length"}

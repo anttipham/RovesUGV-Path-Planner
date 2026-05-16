@@ -175,6 +175,9 @@ def make_buildings(G: nx.MultiDiGraph) -> folium.GeoJson:
     folium.GeoJson
         GeoJson layer with building features.
     """
+    if "ugv_buildings" not in G.graph:
+        # Return an empty layer if there are no buildings to display
+        return folium.GeoJson(gpd.GeoDataFrame(geometry=[], crs=config.MAP_EPSG))
     return folium.GeoJson(
         G.graph["ugv_buildings"],
         style_function=lambda _: {
@@ -200,7 +203,11 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
         Styled GeoJson road layer.
     """
     color_map = plt.get_cmap("Reds")
-    max_log_centrality = math.log2(G.graph["ugv_max_centrality"])
+    max_log_centrality = (
+        math.log2(G.graph.get("ugv_max_centrality", 0))
+        if G.graph.get("ugv_max_centrality", 0) > 0
+        else 0
+    )
 
     # Set minimum log centrality to be the log of the number of building accesses
     buildings_num = len(
@@ -213,21 +220,26 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     # The same building doesn't need paths to itself.
     # Decrement by 1 to remove the building itself.
     building_access_num = buildings_num - 1
-    min_log_centrality = math.log2(building_access_num)
+    min_log_centrality = (
+        math.log2(building_access_num) if building_access_num > 0 else 0
+    )
 
     def style(feature):
-        centrality = feature["properties"]["ugv_centrality"]
+        centrality = feature["properties"].get("ugv_centrality", 0)
 
         if centrality <= building_access_num:
             # Use min centrality as the lower range
             log_centrality = min_log_centrality
         else:
             # Scale centrality to log scale
-            log_centrality = math.log2(centrality)
+            log_centrality = math.log2(centrality) if centrality > 0 else 0
 
         # Normalize log centrality to [0.0, 1.0] for color mapping
-        log_centrality_normalized = (log_centrality - min_log_centrality) / (
-            max_log_centrality - min_log_centrality
+        log_centrality_normalized = (
+            (log_centrality - min_log_centrality)
+            / (max_log_centrality - min_log_centrality)
+            if max_log_centrality > 0 and max_log_centrality > min_log_centrality
+            else 0
         )
 
         # Set road style
@@ -264,6 +276,9 @@ def make_crossings(G: nx.MultiDiGraph) -> folium.GeoJson:
     H = G.subgraph(
         [node for node, crossing in G.nodes(data="ugv_crossing") if crossing == True]
     )
+    if H.number_of_nodes() == 0:
+        # Return an empty layer if there are no crossings to display
+        return folium.GeoJson(gpd.GeoDataFrame(geometry=[], crs=config.MAP_EPSG))
     gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
     return folium.GeoJson(
         gdf,
@@ -295,6 +310,9 @@ def make_intersections(G: nx.MultiDiGraph) -> folium.GeoJson:
             if intersection == True
         ]
     )
+    if H.number_of_nodes() == 0:
+        # Return an empty layer if there are no intersections to display
+        return folium.GeoJson(gpd.GeoDataFrame(geometry=[], crs=config.MAP_EPSG))
     gdf = ox.graph_to_gdfs(H, nodes=True, edges=False)
     return folium.GeoJson(
         gdf,
@@ -424,19 +442,21 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
     # Show the last 2 buildings in the list and the path between them
     building_path = folium.FeatureGroup(name=config.PATH_LAYER_NAME, control=True)
     ids2 = ids[-2:]
-    buildings = G.graph["ugv_buildings"]
-    chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids2)]
-    folium.GeoJson(
-        chosen_buildings,
-        style_function=lambda _: {
-            "fillColor": "#0095FF",
-            "color": "black",
-            "weight": 3,
-            "fillOpacity": 0.4,
-        },
-    ).add_to(building_path)
+    buildings = G.graph.get("ugv_buildings")
+    if buildings is not None:
+        chosen_buildings = buildings[buildings.index.get_level_values("id").isin(ids2)]
+        folium.GeoJson(
+            chosen_buildings,
+            style_function=lambda _: {
+                "fillColor": "#0095FF",
+                "color": "black",
+                "weight": 3,
+                "fillOpacity": 0.4,
+            },
+        ).add_to(building_path)
+
     # Path requires a (1) source and (2) target node
-    if len(ids2) >= 2:
+    if len(ids2) >= 2 and "ugv_all_building_path_pairs" in G.graph:
         # Show shortest path between buildings
         edges = G.graph["ugv_all_building_path_pairs"].get((ids2[0], ids2[1]), [])
         path_graph = G.edge_subgraph(edges)
@@ -448,4 +468,5 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
                 "opacity": 1,
             },
         ).add_to(building_path)
+
     return building_path

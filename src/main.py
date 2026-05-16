@@ -127,23 +127,23 @@ def main():
         path.update_building_access(G)
         graph.add_custom_attributes(G)
 
-        if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
-            path.add_all_building_path_pairs(G)
-            path.add_betweenness_centrality(G)
-        else:
-            old_centrality = G.graph.get("ugv_max_centrality", 0)
-            for i in range(config.CENTRALITY_ITERATION_LIMIT):
-                # Recalculate paths and centrality until convergence (max centrality
-                # no longer changes between iterations)
-                if old_centrality == G.graph.get("ugv_max_centrality"):
-                    break
-                old_centrality = G.graph.get("ugv_max_centrality", 0)
-                path.add_all_building_path_pairs(G)
-                path.add_betweenness_centrality(G)
-                print(
-                    f"Centrality iteration {i+1}, "
-                    f"max centrality: {G.graph['ugv_max_centrality']}"
-                )
+        # if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
+        #     path.add_all_building_path_pairs(G)
+        #     path.add_betweenness_centrality(G)
+        # else:
+        #     old_centrality = G.graph.get("ugv_max_centrality", 0)
+        #     for i in range(config.CENTRALITY_ITERATION_LIMIT):
+        #         # Recalculate paths and centrality until convergence (max centrality
+        #         # no longer changes between iterations)
+        #         if old_centrality == G.graph.get("ugv_max_centrality"):
+        #             break
+        #         old_centrality = G.graph.get("ugv_max_centrality", 0)
+        #         path.add_all_building_path_pairs(G)
+        #         path.add_betweenness_centrality(G)
+        #         print(
+        #             f"Centrality iteration {i+1}, "
+        #             f"max centrality: {G.graph['ugv_max_centrality']}"
+        #         )
 
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
@@ -167,11 +167,12 @@ def main():
         feature_group_to_add=map_interaction_features,
         on_change=handle_map_click,
         layer_control=folium.LayerControl(),
+        height=1200,
     )
 
     # Debug output: selected route and per-edge costs
     ids = st.session_state["selected_buildings"][-2:]
-    if len(ids) == 2:
+    if len(ids) == 2 and "ugv_all_building_path_pairs" in G.graph:
         source, target = ids[0], ids[1]
         path_data = G.graph["ugv_all_building_path_pairs"].get((source, target))
 
