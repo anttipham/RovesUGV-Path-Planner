@@ -127,23 +127,23 @@ def main():
         path.update_building_access(G)
         graph.add_custom_attributes(G)
 
-        # if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
-        #     path.add_all_building_path_pairs(G)
-        #     path.add_betweenness_centrality(G)
-        # else:
-        #     old_centrality = G.graph.get("ugv_max_centrality", 0)
-        #     for i in range(config.CENTRALITY_ITERATION_LIMIT):
-        #         # Recalculate paths and centrality until convergence (max centrality
-        #         # no longer changes between iterations)
-        #         if old_centrality == G.graph.get("ugv_max_centrality"):
-        #             break
-        #         old_centrality = G.graph.get("ugv_max_centrality", 0)
-        #         path.add_all_building_path_pairs(G)
-        #         path.add_betweenness_centrality(G)
-        #         print(
-        #             f"Centrality iteration {i+1}, "
-        #             f"max centrality: {G.graph['ugv_max_centrality']}"
-        #         )
+        if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
+            path.add_all_building_path_pairs(G)
+            path.add_betweenness_centrality(G)
+        else:
+            old_centrality = G.graph.get("ugv_max_centrality", 0)
+            for i in range(config.CENTRALITY_ITERATION_LIMIT):
+                # Recalculate paths and centrality until convergence (max centrality
+                # no longer changes between iterations)
+                if old_centrality == G.graph.get("ugv_max_centrality"):
+                    break
+                old_centrality = G.graph.get("ugv_max_centrality", 0)
+                path.add_all_building_path_pairs(G)
+                path.add_betweenness_centrality(G)
+                print(
+                    f"Centrality iteration {i+1}, "
+                    f"max centrality: {G.graph['ugv_max_centrality']}"
+                )
 
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
