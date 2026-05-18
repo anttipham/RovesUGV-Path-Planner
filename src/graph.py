@@ -90,10 +90,16 @@ def add_custom_attributes(G: nx.MultiDiGraph) -> None:
 
     # Identify roadway intersections for additional penalty
     for node in G.nodes():
-        roadways = [
-            (u, v, key)
-            for u, v, key, data in G.edges(node, keys=True, data=True)
+        roadways_out = [
+            (u, v)
+            for u, v, key, data in G.out_edges(node, keys=True, data=True)
             if not data.get("ugv_sidewalk")
         ]
+        roadways_in = [
+            (v, u)
+            for u, v, key, data in G.in_edges(node, keys=True, data=True)
+            if not data.get("ugv_sidewalk")
+        ]
+        roadways = set(roadways_out + roadways_in)
         if len(roadways) > 2:
             G.nodes[node]["ugv_intersection"] = True
