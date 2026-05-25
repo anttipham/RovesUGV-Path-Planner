@@ -166,6 +166,8 @@ def main():
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]
+    print(G.graph.get("ugv_restricted_zones_metric"))
+    st.write(G.graph.get("ugv_restricted_zones_metric"))
 
     # Load and build the map
     m = map.build_map(G)

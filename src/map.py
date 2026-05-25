@@ -239,12 +239,12 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
 
         # Set road style
         red, green, blue = color_map(log_centrality_normalized)[:3]
-        thickness = int(3 * log_centrality_normalized) + 1
+        thickness = int(10 * log_centrality_normalized) + 1
         color = f"#{int(red*255):02x}{int(green*255):02x}{int(blue*255):02x}"
         return {
             "color": color,
             "weight": thickness,
-            "opacity": 0.5,
+            "opacity": 1,
         }
 
     return folium.GeoJson(
@@ -456,6 +456,8 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
     if len(ids2) >= 2 and "ugv_all_building_path_pairs" in G.graph:
         # Show shortest path between buildings
         edges = G.graph["ugv_all_building_path_pairs"].get((ids2[0], ids2[1]), [])
+        if not edges:
+            edges = G.graph["ugv_all_building_path_pairs"].get((ids2[1], ids2[0]), [])
         path_graph = G.edge_subgraph(edges)
         folium.GeoJson(
             ox.graph_to_gdfs(path_graph, nodes=False),

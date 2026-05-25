@@ -43,14 +43,14 @@ MAP_EPSG = "EPSG:4326"  # WGS84 geographic CRS
 METRIC_EPSG = "EPSG:3857"  # Web Mercator projected CRS (meters)
 
 # Cost constants for routing
-COST_SIDEWALK = 0.008  # Cost per meter on sidewalk
-COST_ROADWAY = 5 * COST_SIDEWALK  # Cost per meter on roadway
+COST_SIDEWALK = 1  # Cost per meter on sidewalk
+COST_ROADWAY = 0 * COST_SIDEWALK  # Cost per meter on roadway
 COST_TRAFFIC_SIGNALS = 0  # Additional cost at traffic-signal crossings
-COST_ZEBRA_CROSSING = 2  # Additional cost at zebra/marked crossings
-COST_UNCONTROLLED_CROSSING = 5  # Additional cost at uncontrolled crossings
-COST_ROADWAY_CROSSING = 30  # Penalty for exiting a crossing onto a roadway
+COST_ZEBRA_CROSSING = 0  # Additional cost at zebra/marked crossings
+COST_UNCONTROLLED_CROSSING = 0  # Additional cost at uncontrolled crossings
+COST_ROADWAY_CROSSING = 0  # Penalty for exiting a crossing onto a roadway
 COST_CENTRALITY_FACTOR = 0.0  # Multiplier for edge centrality penalty (0 = disabled)
-CENTRALITY_ITERATION_LIMIT = 100  # Max iteration limit for the backbone calculation
+CENTRALITY_ITERATION_LIMIT = 1  # Max iteration limit for the backbone calculation
 
 # 2D raster pathfinding constants
 GRADUAL_OBSTACLE_COST_RADIUS = (
