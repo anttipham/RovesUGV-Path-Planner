@@ -166,8 +166,11 @@ def main():
         st.session_state["graph"] = G
         st.session_state["update_graph"] = False
     G: nx.MultiDiGraph = st.session_state["graph"]
-    print(G.graph.get("ugv_restricted_zones_metric"))
-    st.write(G.graph.get("ugv_restricted_zones_metric"))
+
+    # Debug output: restricted zones in metric CRS
+    zones_: list[shapely.Polygon] = G.graph["ugv_restricted_zones_metric"]
+    zones = [tuple(zone.exterior.coords) for zone in zones_]
+    print(zones)
 
     # Load and build the map
     m = map.build_map(G)
