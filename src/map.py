@@ -453,7 +453,14 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
         ).add_to(building_path)
 
     # Path requires a (1) source and (2) target node
-    if len(ids2) >= 2 and "ugv_all_building_path_pairs" in G.graph:
+    if (
+        len(ids2) >= 2
+        and "ugv_all_building_path_pairs" in G.graph
+        and (
+            (ids2[0], ids2[1]) in G.graph["ugv_all_building_path_pairs"]
+            or (ids2[1], ids2[0]) in G.graph["ugv_all_building_path_pairs"]
+        )
+    ):
         # Show shortest path between buildings
         edges = G.graph["ugv_all_building_path_pairs"].get((ids2[0], ids2[1]), [])
         if not edges:
@@ -463,7 +470,7 @@ def make_path(G: nx.MultiDiGraph, ids: list[int]) -> folium.FeatureGroup:
             ox.graph_to_gdfs(path_graph, nodes=False),
             style_function=lambda _: {
                 "color": "#007AD1",
-                "weight": 4,
+                "weight": 8,
                 "opacity": 1,
             },
         ).add_to(building_path)

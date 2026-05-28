@@ -38,10 +38,21 @@ import graph
 import path
 import shapely
 
-
 areas = [
-    [[22.95456,62.804469],[22.954474,62.799374],[22.954882,62.799427],[22.954882,62.804542],[22.95456,62.804469]],
-    [[22.993263,62.804385],[22.993231,62.799369],[22.992876,62.799344],[22.992608,62.804493],[22.993263,62.804385]]
+    [
+        [22.95456, 62.804469],
+        [22.954474, 62.799374],
+        [22.954882, 62.799427],
+        [22.954882, 62.804542],
+        [22.95456, 62.804469],
+    ],
+    [
+        [22.993263, 62.804385],
+        [22.993231, 62.799369],
+        [22.992876, 62.799344],
+        [22.992608, 62.804493],
+        [22.993263, 62.804385],
+    ],
 ]
 
 
@@ -195,8 +206,14 @@ def main():
 
     # Debug output: selected route and per-edge costs
     ids = st.session_state["selected_buildings"][-2:]
+    pair = None
     if len(ids) == 2 and "ugv_all_building_path_pairs" in G.graph:
-        source, target = ids[0], ids[1]
+        if (ids[0], ids[1]) in G.graph["ugv_all_building_path_pairs"]:
+            pair = (ids[0], ids[1])
+        elif (ids[1], ids[0]) in G.graph["ugv_all_building_path_pairs"]:
+            pair = (ids[1], ids[0])
+    if pair is not None:
+        source, target = pair
         path_data = G.graph["ugv_all_building_path_pairs"].get((source, target))
 
         total_cost = sum(path.calculate_cost(G, (u, v, key)) for u, v, key in path_data)
