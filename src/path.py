@@ -368,7 +368,7 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
     - Roadway penalty: COST_ROADWAY * length
     - Crossing penalties vary by type (traffic signals, zebra, etc.)
     - Roadway crossing exit penalty: COST_ROADWAY_CROSSING
-    - Centrality factor: scaled by 1 - (centrality / max_centrality)
+    - Centrality factor: scaled by 1 - log-normalized centrality
     """
     prev_node, curr_node, key = curr_edge
 
@@ -424,10 +424,13 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
 
     # Penalty for not following high centrality paths
     if "ugv_centrality" in G.edges[curr_edge]:
+        max_centrality = G.graph.get("ugv_max_centrality", 0)
+        centrality = G.edges[curr_edge]["ugv_centrality"]
+        normalized_centrality = math.log1p(centrality) / math.log1p(max_centrality)
         penalty += (
             config.COST_CENTRALITY_FACTOR
             * length
-            * (1 - G.edges[curr_edge]["ugv_centrality"] / G.graph["ugv_max_centrality"])
+            * (1 - normalized_centrality)
         )
     else:
         penalty += config.COST_CENTRALITY_FACTOR * length

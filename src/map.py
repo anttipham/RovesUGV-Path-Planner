@@ -203,11 +203,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
         Styled GeoJson road layer.
     """
     color_map = plt.get_cmap("Reds")
-    max_log_centrality = (
-        math.log2(G.graph.get("ugv_max_centrality", 0))
-        if G.graph.get("ugv_max_centrality", 0) > 0
-        else 0
-    )
+    max_log_centrality = math.log1p(G.graph.get("ugv_max_centrality", 0))
 
     # Set minimum log centrality to be the log of the number of building accesses
     buildings_num = len(
@@ -220,9 +216,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     # The same building doesn't need paths to itself.
     # Decrement by 1 to remove the building itself.
     building_access_num = buildings_num - 1
-    min_log_centrality = (
-        math.log2(building_access_num) if building_access_num > 0 else 0
-    )
+    min_log_centrality = math.log1p(building_access_num)
 
     def style(feature):
         centrality = feature["properties"].get("ugv_centrality", 0)
@@ -232,7 +226,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
             log_centrality = min_log_centrality
         else:
             # Scale centrality to log scale
-            log_centrality = math.log2(centrality) if centrality > 0 else 0
+            log_centrality = math.log1p(centrality)
 
         # Normalize log centrality to [0.0, 1.0] for color mapping
         log_centrality_normalized = (

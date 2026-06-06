@@ -103,14 +103,15 @@ def main():
     """
     # Allow centrality factor override via query parameter, e.g. ?cb=0.5
     cost_centrality_factor = st.query_params.get("cb", config.COST_CENTRALITY_FACTOR)
+    config.COST_CENTRALITY_FACTOR = float(cost_centrality_factor)
     iteration_count = 0  # Centrality iteration counter for display purposes
 
     # Initialize Streamlit page
     st.set_page_config(
-        page_title=f"{config.APP_TITLE} CB_factor={cost_centrality_factor}",
+        page_title=f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}",
         layout="wide",
     )
-    st.title(f"{config.APP_TITLE} CB_factor={cost_centrality_factor}")
+    st.title(f"{config.APP_TITLE} CB_factor={config.COST_CENTRALITY_FACTOR}")
 
     # Initialize session states
     if "graph" not in st.session_state:
@@ -127,7 +128,7 @@ def main():
         path.update_building_access(G)
         graph.add_custom_attributes(G)
 
-        if float(cost_centrality_factor) == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
+        if config.COST_CENTRALITY_FACTOR == 0 or config.CENTRALITY_ITERATION_LIMIT == 0:
             path.add_all_building_path_pairs(G)
             path.add_betweenness_centrality(G)
         else:
@@ -141,7 +142,7 @@ def main():
                 path.add_all_building_path_pairs(G)
                 path.add_betweenness_centrality(G)
                 print(
-                    f"CB_factor: {cost_centrality_factor}, "
+                    f"CB_factor: {config.COST_CENTRALITY_FACTOR}, "
                     f"Centrality iteration {i+1}, "
                     f"Max centrality: {G.graph['ugv_max_centrality']}"
                 )
@@ -172,7 +173,7 @@ def main():
         height=1200,
     )
 
-    st.write(f"Iteration {iteration_count} completed with CB_factor={cost_centrality_factor}")
+    st.write(f"Iteration {iteration_count} completed with CB_factor={config.COST_CENTRALITY_FACTOR}")
 
     # Debug output: selected route and per-edge costs
     ids = st.session_state["selected_buildings"][-2:]
