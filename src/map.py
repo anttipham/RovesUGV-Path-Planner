@@ -221,7 +221,7 @@ def make_roads(G: nx.MultiDiGraph) -> folium.GeoJson:
     def style(feature):
         centrality = feature["properties"].get("ugv_centrality", 0)
 
-        if centrality <= building_access_num:
+        if centrality is None or centrality <= building_access_num:
             # Use min centrality as the lower range
             log_centrality = min_log_centrality
         else:
