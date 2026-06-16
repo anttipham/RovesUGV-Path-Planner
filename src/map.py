@@ -311,8 +311,8 @@ def make_intersections(G: nx.MultiDiGraph) -> folium.GeoJson:
     return folium.GeoJson(
         gdf,
         marker=folium.CircleMarker(
-            radius=3,
-            weight=2,
+            radius=2,
+            weight=1,
             color="black",
             fill_color="red",
             fill_opacity=0.7,
