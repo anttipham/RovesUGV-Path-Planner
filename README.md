@@ -112,3 +112,5 @@ Edge attributes:
 - In some cases, the end of the virtual path does not connect to another virtual path when multiple access points to the street network is found. The reason for this is currently unknown, but it is most likely related to the way the virtual paths split the graph (split_nearest_edge) in [path.calc_premise_path](/src/path.py).
 - Rename folium.Draw plugin toolbar button names to be more intuitive. Currently, the "Polygon" tool is used for drawing restricted zones and the "Marker" tool is used for placing building access points.
 - If needed, a turn-aware Dijkstra's algorithm could be used instead to track turning from a sidewalk (`ugv_sidewalk=True`) to a roadway (`ugv_sidewalk=False`).
+- Crossing types are not read because I didn't notice that OSMnx does not read the `crossing` tag by default (oops...). Reading the crossing tag and adding it as a node attribute would enable more accurate penalties for crossing different types of roads. Currently, all crossings are treated the same with a generic crossing penalty.
+- Currently, the cost constants are hardcoded in `config.py`. It would be useful to have a UI for adjusting these parameters.
