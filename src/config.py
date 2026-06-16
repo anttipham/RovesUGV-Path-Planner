@@ -54,7 +54,7 @@ SIMPLIFICATION_LINE_TOLERANCE = 3  # Tolerance for LineString.simplify()
 TRAVERSABLE_THRESHOLD = (
     98  # Grayscale threshold to distinguish free space from obstacles
 )
-GOAL_BLOCK_DIAMETER = 75  # Diameter (pixels) of suppression circle around reached goals
+GOAL_BLOCK_DIAMETER = 25  # Diameter (pixels) of suppression circle around reached goals
 MINIMUM_OBSTACLE_DISTANCE = 2  # Dilation radius (pixels) for obstacle safety margin
 BBOX_SIZE = 1000  # Size (meters) of bounding box around clicked point
 BBOX_IMAGE_SIZE = 512  # Resolution (pixels) of downloaded raster tiles
