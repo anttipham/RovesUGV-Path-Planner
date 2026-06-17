@@ -423,15 +423,14 @@ def calculate_cost(G: nx.MultiDiGraph, curr_edge: tuple[int, int, int]) -> float
         penalty += config.COST_ROADWAY * length
 
     # Penalty for not following high centrality paths
-    if "ugv_centrality" in G.edges[curr_edge]:
+    if (
+        "ugv_centrality" in G.edges[curr_edge]
+        and G.graph.get("ugv_max_centrality", 0) > 0
+    ):
         max_centrality = G.graph.get("ugv_max_centrality", 0)
         centrality = G.edges[curr_edge]["ugv_centrality"]
         normalized_centrality = math.log1p(centrality) / math.log1p(max_centrality)
-        penalty += (
-            config.COST_CENTRALITY_FACTOR
-            * length
-            * (1 - normalized_centrality)
-        )
+        penalty += config.COST_CENTRALITY_FACTOR * length * (1 - normalized_centrality)
     else:
         penalty += config.COST_CENTRALITY_FACTOR * length
 
@@ -470,6 +469,21 @@ def add_all_building_path_pairs(G: nx.MultiDiGraph) -> None:
         all_building_path_pairs.update(edge_paths)
 
     G.graph["ugv_all_building_path_pairs"] = all_building_path_pairs
+
+
+def clear_betweenness_centrality(G: nx.MultiDiGraph) -> None:
+    """
+    Reset previously stored edge betweenness centrality attributes.
+
+    Parameters
+    ----------
+    G : nx.MultiDiGraph
+        Graph whose centrality attributes should be reset.
+    """
+    for _, _, _, data in G.edges(keys=True, data=True):
+        data["ugv_centrality"] = 0
+
+    G.graph["ugv_max_centrality"] = 0
 
 
 def add_betweenness_centrality(G: nx.MultiDiGraph) -> None:
